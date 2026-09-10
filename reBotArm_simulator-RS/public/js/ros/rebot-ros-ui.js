@@ -975,7 +975,9 @@
   async function toggleHardwareTeaching() {
     if (hardwareTeachBusy) return;
     if (hardwareTeachActive) {
-      await stopHardwareTeaching(true);
+      // An explicit teaching finish owns the post-teach home. Cleanup paths
+      // such as Disable and Safe Home already perform their own final action.
+      await stopHardwareTeaching(true, { returnHome: true });
       return;
     }
     await startHardwareTeaching();
@@ -1017,7 +1019,7 @@
     }
   }
 
-  async function stopHardwareTeaching(stopGravity) {
+  async function stopHardwareTeaching(stopGravity, options) {
     if (!hardwareTeachActive) return;
     hardwareTeachActive = false;
     hardwareTeachModeConfirmed = false;
@@ -1025,16 +1027,38 @@
       window.reBotSim.endHardwareTeaching();
     }
     const shouldStopGravity = Boolean(stopGravity) && hardwareTeachGravityStarted && client.connected;
+    const shouldReturnHome = Boolean(options && options.returnHome) && client.connected;
     hardwareTeachGravityStarted = false;
-    updateHardwareTeachUi();
+    hardwareTeachBusy = shouldStopGravity || shouldReturnHome;
+    updateHardwareTeachUi(shouldReturnHome ? t('sim.hardwareTeachHoming') : undefined);
     writeLog('真机推动示教录制已停止', 'info');
-    if (shouldStopGravity) {
-      await guardedCall(
-        () => client.stopGravityCompensation(),
-        '正在退出重力补偿',
-        true,
-        { keepConnectionStatus: true }
-      );
+    try {
+      let gravityStopped = true;
+      if (shouldStopGravity) {
+        const result = await guardedCall(
+          () => client.stopGravityCompensation(),
+          '正在退出重力补偿',
+          true,
+          { keepConnectionStatus: true }
+        );
+        gravityStopped = Boolean(
+          result && result.success !== false && result.accepted !== false
+        );
+      }
+      if (shouldReturnHome && gravityStopped && client.connected) {
+        cancelLowLevelPlayback();
+        resetWebControlState();
+        await guardedCall(
+          () => client.safeHome(),
+          t('msg.teachSafeHome'),
+          true,
+          { keepConnectionStatus: true }
+        );
+        resetWebControlState();
+      }
+    } finally {
+      hardwareTeachBusy = false;
+      updateHardwareTeachUi();
     }
   }
 
