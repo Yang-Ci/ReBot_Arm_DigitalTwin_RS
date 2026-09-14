@@ -17,7 +17,7 @@
 完整仿真会自动启动 MCP Server：
 
 ```bash
-cd /path/to/reBot_Arm_Mujoco-RS
+cd /path/to/ReBot_Arm_DigitalTwin_RS
 ./scripts/start_rs_sim.sh
 ```
 

@@ -33,14 +33,14 @@
 仓库。普通 clone 即可取得完整构建输入：
 
 ```bash
-git clone https://github.com/Yang-Ci/ReBot_Arm_web_RS.git
-cd ReBot_Arm_web_RS
+git clone https://github.com/Yang-Ci/ReBot_Arm_DigitalTwin_RS.git
+cd ReBot_Arm_DigitalTwin_RS
 ```
 
 在当前机器上的默认目录为：
 
 ```bash
-cd /home/robot/reBot_Arm_Mujoco-RS
+cd /home/robot/ReBot_Arm_DigitalTwin_RS
 ```
 
 先只读检查环境：
@@ -68,7 +68,7 @@ cd /home/robot/reBot_Arm_Mujoco-RS
 终端 1：
 
 ```bash
-cd /home/robot/reBot_Arm_Mujoco-RS
+cd /home/robot/ReBot_Arm_DigitalTwin_RS
 ./rebotarm start rs_sim
 ```
 
@@ -104,7 +104,7 @@ REBOTARM_MUJOCO_MODE=kinematic ./rebotarm start rs_sim
 终端 2：
 
 ```bash
-cd /home/robot/reBot_Arm_Mujoco-RS
+cd /home/robot/ReBot_Arm_DigitalTwin_RS
 ./rebotarm start web
 ```
 
@@ -199,7 +199,7 @@ MuJoCo 手指内侧包含不可见的薄碰撞垫，用于提高接触稳定性�
 终端 3：
 
 ```bash
-cd /home/robot/reBot_Arm_Mujoco-RS
+cd /home/robot/ReBot_Arm_DigitalTwin_RS
 export DASHSCOPE_API_KEY='替换成你的 Key'
 export REBOTARM_LLM_MODEL='qwen-plus'
 ./scripts/start_rs_text_agent.sh
@@ -274,7 +274,7 @@ ip -details link show can0
 终端 1：
 
 ```bash
-cd /home/robot/reBot_Arm_Mujoco-RS
+cd /home/robot/ReBot_Arm_DigitalTwin_RS
 REBOTARM_RS_HARDWARE_CONFIRM=I_UNDERSTAND_RS_WILL_MOVE \
   ./rebotarm start rs
 ```

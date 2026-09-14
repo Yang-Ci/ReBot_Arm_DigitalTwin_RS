@@ -34,7 +34,7 @@ npm start
 GitHub Pages 地址：
 
 ```text
-https://yang-ci.github.io/ReBot_Arm_web_RS/rs-console/
+https://yang-ci.github.io/ReBot_Arm_DigitalTwin_RS/rs-console/
 ```
 
 Pages 构建使用 `npm run build:pages -- ../web_mujoco/dist/rs-console`，会

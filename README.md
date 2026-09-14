@@ -1,4 +1,4 @@
-# reBot Arm B601-RS
+# ReBot Arm Digital Twin & Control Stack — B601-RS
 
 B601-RS（RobStride + SocketCAN）完整控制与仿真工程，包含 ROS 2 真机驱动、Three.js 网页、
 RS 专用 MuJoCo 动力学场景、视觉检测、轨迹/IK 和 MCP 抓取 Agent。
@@ -32,7 +32,7 @@ RS 专用 MuJoCo 动力学场景、视觉检测、轨迹/IK 和 MCP 抓取 Agent
 ## 安装
 
 ```bash
-cd /home/robot/reBot_Arm_Mujoco-RS
+cd /home/robot/ReBot_Arm_DigitalTwin_RS
 ./setup.sh --check       # 只检查，不修改系统
 ./setup.sh --yes         # 一键安装依赖、资源并构建
 ./rebotarm doctor        # 安装完成后复查

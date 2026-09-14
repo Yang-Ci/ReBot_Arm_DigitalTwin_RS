@@ -21,7 +21,7 @@
 ## 3. 工程结构
 
 ```text
-reBot_Arm_Mujoco-RS/
+ReBot_Arm_DigitalTwin_RS/
 ├── README.md                         # 快速开始和入口索引
 ├── DEVELOPER_GUIDE_ZH.md             # 本开发手册
 ├── DM_RS_COMPARISON_ZH.md            # DM/RS 模式、速度与优化对比
@@ -53,7 +53,7 @@ reBot_Arm_Mujoco-RS/
 ## 4. 一键安装
 
 ```bash
-cd /home/robot/reBot_Arm_Mujoco-RS
+cd /home/robot/ReBot_Arm_DigitalTwin_RS
 ./setup.sh --check        # 只检查，不改系统
 ./setup.sh --yes          # 安装缺失依赖、拉取固定资源、构建
 ./rebotarm doctor         # 安装后的复查
@@ -151,7 +151,7 @@ candump can0
 ### 6.2 启动控制器
 
 ```bash
-cd /home/robot/reBot_Arm_Mujoco-RS
+cd /home/robot/ReBot_Arm_DigitalTwin_RS
 REBOTARM_RS_HARDWARE_CONFIRM=I_UNDERSTAND_RS_WILL_MOVE \
   ./rebotarm start rs
 ```

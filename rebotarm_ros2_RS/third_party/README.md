@@ -1,7 +1,7 @@
 # Vendored control SDK
 
 This directory is ordinary source tracked by the parent
-`ReBot_Arm_web_RS` repository. It is intentionally **not** a Git submodule or
+`ReBot_Arm_DigitalTwin_RS` repository. It is intentionally **not** a Git submodule or
 nested repository.
 
 | Directory | Upstream | Baseline revision |

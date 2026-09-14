@@ -98,7 +98,7 @@ ip -details link show can0
 
 ### Step 2. 使用集成的 ROS2 工作区
 
-本目录已经包含在 `ReBot_Arm_web_RS` 父仓库中。只需 clone 一次父仓库，再进入
+本目录已经包含在 `ReBot_Arm_DigitalTwin_RS` 父仓库中。只需 clone 一次父仓库，再进入
 `rebotarm_ros2_RS`，无需另外获取 ROS 仓库。
 
 ### Step 3. 安装锁定版本的硬件依赖

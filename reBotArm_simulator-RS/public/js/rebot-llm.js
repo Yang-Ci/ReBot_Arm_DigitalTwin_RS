@@ -3,7 +3,7 @@
     '网页只能连接 text-agent，不能自动启动虚拟机里的服务。',
     '',
     '请在运行仿真的 Ubuntu 虚拟机中打开新终端，依次执行：',
-    '  cd /home/robot/reBot_Arm_Mujoco-RS',
+    '  cd /home/robot/ReBot_Arm_DigitalTwin_RS',
     "  export DASHSCOPE_API_KEY='替换成你的 Key'",
     "  export REBOTARM_LLM_MODEL='qwen-plus'",
     '  ./scripts/start_rs_text_agent.sh',

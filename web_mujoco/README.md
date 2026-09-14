@@ -44,7 +44,7 @@ npm run test:explode
 
 地址为：
 
-`https://<owner>.github.io/ReBot_Arm_web_RS/`
+`https://<owner>.github.io/ReBot_Arm_DigitalTwin_RS/`
 
 首次打开会下载全部网格，请用 Chrome 或 Edge。
 
@@ -52,7 +52,7 @@ npm run test:explode
 
 ```bash
 cd web_mujoco
-GITHUB_PAGES_BASE=/ReBot_Arm_web_RS/ npm run build
+GITHUB_PAGES_BASE=/ReBot_Arm_DigitalTwin_RS/ npm run build
 npx vite preview
 ```
 

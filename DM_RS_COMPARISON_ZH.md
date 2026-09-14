@@ -2,8 +2,8 @@
 
 本文以当前两个本地工程的实际源码和配置为准：
 
-- DM：`/home/robot/reBot_Arm_Mujoco-DM`
-- RS：`/home/robot/reBot_Arm_Mujoco-RS`
+- DM：`/home/robot/ReBot_Arm_DigitalTwin_DM`
+- RS：`/home/robot/ReBot_Arm_DigitalTwin_RS`
 
 这里的“频率”必须分层理解。网页最多发送 60 Hz，并不代表电机只以 60 Hz 控制；RS
 控制器会在收到新目标后，用自己的 125 Hz 实时循环持续生成并发送 MIT 指令。
@@ -227,7 +227,7 @@ RS 主要来源：
 
 DM 主要来源：
 
-- `/home/robot/reBot_Arm_Mujoco-DM/reBotArmController_ROS2-main/src/rebotarm_bringup/config/rebotarm_hardware.yaml`
-- `/home/robot/reBot_Arm_Mujoco-DM/reBotArm_simulator-DM/public/js/ros/rebot-ros-ui.js`
-- `/home/robot/reBot_Arm_Mujoco-DM/DATA_FLOW_ZH.md`
-- `/home/robot/reBot_Arm_Mujoco-DM/PROJECT_ARCHITECTURE_ZH.md`
+- `/home/robot/ReBot_Arm_DigitalTwin_DM/reBotArmController_ROS2-main/src/rebotarm_bringup/config/rebotarm_hardware.yaml`
+- `/home/robot/ReBot_Arm_DigitalTwin_DM/reBotArm_simulator-DM/public/js/ros/rebot-ros-ui.js`
+- `/home/robot/ReBot_Arm_DigitalTwin_DM/DATA_FLOW_ZH.md`
+- `/home/robot/ReBot_Arm_DigitalTwin_DM/PROJECT_ARCHITECTURE_ZH.md`

@@ -100,7 +100,7 @@ Choose and install the appropriate ROS2 distribution from the
 
 ### Step 2. Use the integrated ROS2 workspace
 
-This directory is part of `ReBot_Arm_web_RS`. Clone the parent repository once,
+This directory is part of `ReBot_Arm_DigitalTwin_RS`. Clone the parent repository once,
 then enter `rebotarm_ros2_RS`; no separate ROS repository is required.
 
 ### Step 3. Install pinned hardware dependencies
