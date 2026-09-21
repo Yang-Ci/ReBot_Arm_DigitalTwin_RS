@@ -45,6 +45,20 @@ class ArmServices:
             (SetGripper, "gripper/set", self.set_gripper, node.reentrant_group),
             (GripperCommand, "gripper/open", self.open_gripper, node.slow_group),
             (GripperCommand, "gripper/close", self.close_gripper, node.slow_group),
+            (Trigger, "gripper/release", self.release_gripper, node.slow_group),
+            (Trigger, "gripper/hold", self.hold_gripper, node.slow_group),
+            (
+                Trigger,
+                "gripper/assist/start",
+                self.start_gripper_assist,
+                node.slow_group,
+            ),
+            (
+                Trigger,
+                "gripper/assist/status",
+                self.gripper_assist_status,
+                node.reentrant_group,
+            ),
         )
         for srv_type, name, handler, group in services:
             node.create_service(
@@ -150,7 +164,12 @@ class ArmServices:
                     f"current-pose target deg=[{degrees}]"
                 )
             else:
-                response.message = "gravity compensation inactive"
+                fault = self._hardware.gravity_compensation_fault()
+                response.message = (
+                    f"gravity compensation inactive; last fault: {fault}"
+                    if fault
+                    else "gravity compensation inactive"
+                )
         except Exception as exc:
             response.success = False
             response.message = str(exc)
@@ -204,6 +223,41 @@ class ArmServices:
         return self._move_gripper(
             request, response, self._hardware.gripper_close_position, "close"
         )
+
+    def release_gripper(self, _request, response):
+        return self._run(
+            response,
+            self._hardware.release_gripper_for_manual,
+            "gripper released for manual movement",
+        )
+
+    def hold_gripper(self, _request, response):
+        return self._run(
+            response,
+            self._hardware.hold_gripper_current,
+            "gripper holding current position",
+        )
+
+    def start_gripper_assist(self, _request, response):
+        return self._run(
+            response,
+            self._hardware.start_gripper_assist,
+            "gripper low-resistance assist active",
+        )
+
+    def gripper_assist_status(self, _request, response):
+        active = self._hardware.gripper_assist_active()
+        response.success = bool(active)
+        response.message = (
+            "gripper low-resistance assist active"
+            if active
+            else (
+                "gripper released for manual movement"
+                if self._hardware.gripper_manual_free()
+                else "gripper position hold active"
+            )
+        )
+        return response
 
     def _move_gripper(self, request, response, default_target: float, label: str):
         try:

@@ -163,6 +163,22 @@
       });
     }
 
+    releaseGripper() {
+      return this.callService(`/${this.namespace}/gripper/release`, 'std_srvs/srv/Trigger', {});
+    }
+
+    holdGripper() {
+      return this.callService(`/${this.namespace}/gripper/hold`, 'std_srvs/srv/Trigger', {});
+    }
+
+    startGripperAssist() {
+      return this.callService(`/${this.namespace}/gripper/assist/start`, 'std_srvs/srv/Trigger', {});
+    }
+
+    gripperAssistStatus() {
+      return this.callService(`/${this.namespace}/gripper/assist/status`, 'std_srvs/srv/Trigger', {});
+    }
+
     moveToPose(pose, duration) {
       return this.sendActionGoal(`/${this.namespace}/move_to_pose`, 'rebotarm_msgs/action/MoveToPose', {
         target_pose: pose,

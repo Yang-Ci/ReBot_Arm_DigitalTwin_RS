@@ -32,8 +32,13 @@
 | Service | `/rebotarm/gripper/set` | `rebotarm_msgs/srv/SetGripper` | 设置夹爪电机位置 |
 | Service | `/rebotarm/gripper/open` | `rebotarm_msgs/srv/GripperCommand` | 打开夹爪到指定或默认位置 |
 | Service | `/rebotarm/gripper/close` | `rebotarm_msgs/srv/GripperCommand` | 闭合夹爪到指定或默认位置 |
+| Service | `/rebotarm/gripper/release` | `std_srvs/srv/Trigger` | 单独失能 J7，便于手动调整 |
+| Service | `/rebotarm/gripper/hold` | `std_srvs/srv/Trigger` | 在当前 J7 测量位置恢复保持 |
+| Service | `/rebotarm/gripper/assist/start` | `std_srvs/srv/Trigger` | 启动夹爪低阻随动助力 |
+| Service | `/rebotarm/gripper/assist/status` | `std_srvs/srv/Trigger` | 查询夹爪助力/释放/保持状态 |
 | Service | `/rebotarm/gravity_compensation/start` | `std_srvs/srv/Trigger` | 启动 controller 内部重力补偿 |
 | Service | `/rebotarm/gravity_compensation/stop` | `std_srvs/srv/Trigger` | 停止 controller 内部重力补偿 |
+| Service | `/rebotarm/gravity_compensation/status` | `std_srvs/srv/Trigger` | 查询重力补偿和最近故障 |
 | Action | `/rebotarm/move_to_pose` | `rebotarm_msgs/action/MoveToPose` | 末端位姿轨迹 |
 | Action | `/rebotarm/follow_joint_trajectory` | `control_msgs/action/FollowJointTrajectory` | 标准关节轨迹 |
 | Action | `/rebotarm/gripper/command` | `control_msgs/action/GripperCommand` | 标准夹爪 action |
@@ -263,8 +268,8 @@ ros2 service call /rebotarm/disable std_srvs/srv/Trigger
 std_srvs/srv/Trigger
 ```
 
-说明：调用前会先停止重力补偿；如果夹爪已初始化，会先闭合夹爪到 `0.0rad`，
-然后切回 `pos_vel` 控制并调用 SDK `RebotArmEndPose.safe_home()`，让机械臂以安全速度回零。
+说明：调用前会先停止重力补偿；夹爪保持当前测量开口，不会隐式闭合，
+然后调用 SDK `RebotArmEndPose.safe_home()` 让机械臂以安全速度回零。
 
 示例：
 
@@ -454,6 +459,8 @@ std_srvs/srv/Trigger
 - 进入 MIT 模式后锁定当前关节位置，并启动 controller 内部控制循环。
 - 使用 `compute_generalized_gravity(q)` 计算重力前馈。
 - 对多圈角度反馈做就近连续化，避免 `-4π` 类读数污染锁定目标。
+- 启动时 J7 默认进入低阻随动助力；停止时保持手动调整后的当前开口。
+- `torque_limit` 可选逐关节限幅（0 表示不在 ROS 层额外限幅）；循环异常会记录在 status 中并尝试恢复位置保持。
 
 示例：
 
@@ -469,13 +476,29 @@ ros2 service call /rebotarm/gravity_compensation/start std_srvs/srv/Trigger
 std_srvs/srv/Trigger
 ```
 
-说明：停止 controller 内部重力补偿，并切回 `pos_vel` hold。
+说明：停止 controller 内部重力补偿，并切回普通位置保持；夹爪从当前测量位置恢复保持，不跳回旧目标。
 
 示例：
 
 ```bash
 ros2 service call /rebotarm/gravity_compensation/stop std_srvs/srv/Trigger
 ```
+
+### 夹爪手动调整服务
+
+以下服务都使用 `std_srvs/srv/Trigger`：
+
+```bash
+ros2 service call /rebotarm/gripper/release std_srvs/srv/Trigger
+ros2 service call /rebotarm/gripper/assist/start std_srvs/srv/Trigger
+ros2 service call /rebotarm/gripper/assist/status std_srvs/srv/Trigger
+ros2 service call /rebotarm/gripper/hold std_srvs/srv/Trigger
+```
+
+- `release` 只失能 J7，机械臂其余关节继续当前控制；释放前应取下负载并避开夹点。
+- `assist/start` 用低刚度 MIT 模式跟随已发生的手动运动，静止、限位附近和过速时不施加助力。
+- `hold` 读取 J7 当前位置并恢复普通位置保持。
+- `assist/status` 的 `success=true` 表示助力正在运行；`message` 还会区分已释放和位置保持状态。
 
 ## 4. Action API
 
@@ -844,7 +867,7 @@ ros2 service call /rebotarm/disable std_srvs/srv/Trigger
 - `/follow_joint_trajectory` 按 point 的 `time_from_start` 执行多点关节轨迹。
 - `/move_to_pose` 更适合应用层“到达某个末端位姿”的常规使用。
 - 重力补偿必须在 controller 内部运行；不要在外部 ROS 节点用 `/joint_states` + raw command 重写高频闭环。
-- `/safe_home` 会先闭合夹爪再执行机械臂安全回零；`reBotArmController` 退出时默认也走同一流程。
+- `/safe_home` 在机械臂安全回零时保持当前夹爪开口；`reBotArmController` 退出时默认也走同一流程。
 - 夹爪 `open` / `close` service 是位置控制接口，不包含力反馈夹取判断。
 - 多机械臂场景中，`arm_namespace` 只解决 ROS graph 命名冲突；TF frame 仍需额外规划 frame 前缀或 URDF 命名。
 - 修改 `hardware_manager.py`、`ros_services.py` 或 `ros_actions.py` 后，需要重启 `driver.launch.py` 才会加载新 controller 逻辑。

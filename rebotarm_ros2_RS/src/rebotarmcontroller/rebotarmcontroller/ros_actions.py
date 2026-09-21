@@ -174,7 +174,6 @@ class ArmActions:
         try:
             self._hardware.begin_trajectory_stream()
             self._node.publish_arm_status()
-            start = time.monotonic()
             point_times = [
                 float(point.time_from_start.sec)
                 + float(point.time_from_start.nanosec) * 1e-9
@@ -189,11 +188,24 @@ class ArmActions:
                 if trajectory.header.frame_id == _TEACH_REPLAY_FRAME_ID
                 else _MAX_ACTION_JOINT_SPEED_RAD_S
             )
+            prepare_started_at = time.monotonic()
             point_times, waypoint_velocities = retime_cubic_hermite(
                 targets,
                 point_times,
                 velocity_limit=velocity_limit,
             )
+            prepare_elapsed = time.monotonic() - prepare_started_at
+            if trajectory.header.frame_id == _TEACH_REPLAY_FRAME_ID:
+                self._node.get_logger().info(
+                    "teaching replay prepared: "
+                    f"points={len(targets)}, preparation={prepare_elapsed:.3f}s, "
+                    f"duration={point_times[-1]:.3f}s"
+                )
+            # Retiming a full teaching recording may process up to 1500
+            # waypoints.  Start the playback clock only after that work is
+            # complete; otherwise the first samples are already overdue and
+            # are emitted back-to-back as the loop tries to catch up.
+            start = time.monotonic()
 
             for index in range(1, len(targets)):
                 q0 = targets[index - 1]

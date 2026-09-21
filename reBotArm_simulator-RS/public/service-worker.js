@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rebot-arm-rs-pwa-v91-teach-home';
+const CACHE_NAME = 'rebot-arm-rs-pwa-v93-preset-smooth';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -6,11 +6,11 @@ const APP_SHELL = [
   '/favicon.png',
   '/css/rebot-sim.css?v=20260813-rs-guide43',
   '/js/pwa.js?v=20260812-rs-ctrl32',
-  '/js/i18n.js?v=20260908-rs-teach04',
-  '/js/rebot-sim.js?v=20260904-rs-teach03',
-  '/js/ros/rebot-ros-client.js?v=20260812-rs-ctrl32',
+  '/js/i18n.js?v=20260921-rs-preset-smooth02',
+  '/js/rebot-sim.js?v=20260921-rs-preset-smooth02',
+  '/js/ros/rebot-ros-client.js?v=20260921-rs-preset-smooth02',
   '/js/control-mode.js?v=20260812-rs-ctrl32',
-  '/js/ros/rebot-ros-ui.js?v=20260908-rs-teach04',
+  '/js/ros/rebot-ros-ui.js?v=20260921-rs-preset-smooth02',
   '/js/rebot-llm.js?v=20260813-rs-guide43',
   '/lib/three-r128.min.js',
   '/lib/STLLoader-umd.js',

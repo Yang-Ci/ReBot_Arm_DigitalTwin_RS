@@ -167,8 +167,52 @@ def _add_runtime_config(data: dict[str, Any]) -> None:
                 n,
                 "gravity_compensation.tau_scale",
             ),
+            "torque_limit": _nonnegative_vector(
+                gravity_config.get("torque_limit", 0.0),
+                n,
+                "gravity_compensation.torque_limit",
+            ),
+        },
+        "gripper_assist": {
+            "torque": _nonnegative_scalar(
+                (data.get("gripper_assist", {}) or {}).get("torque", 0.04),
+                "gripper_assist.torque",
+            ),
+            "kd": _nonnegative_scalar(
+                (data.get("gripper_assist", {}) or {}).get("kd", 0.001),
+                "gripper_assist.kd",
+            ),
+            "velocity_threshold": _positive_scalar(
+                (data.get("gripper_assist", {}) or {}).get("velocity_threshold", 0.02),
+                "gripper_assist.velocity_threshold",
+            ),
+            "velocity_full": _positive_scalar(
+                (data.get("gripper_assist", {}) or {}).get("velocity_full", 0.22),
+                "gripper_assist.velocity_full",
+            ),
+            "speed_limit": _positive_scalar(
+                (data.get("gripper_assist", {}) or {}).get("speed_limit", 0.8),
+                "gripper_assist.speed_limit",
+            ),
+            "breakaway_fraction": _unit_scalar(
+                (data.get("gripper_assist", {}) or {}).get("breakaway_fraction", 0.30),
+                "gripper_assist.breakaway_fraction",
+            ),
         }
     }
+
+    joint_direction = data["_runtime"]["gravity_compensation"]["joint_direction"]
+    if any(value not in (-1.0, 1.0) for value in joint_direction):
+        raise ValueError(
+            "gravity_compensation.joint_direction values must be +1 or -1"
+        )
+    assist = data["_runtime"]["gripper_assist"]
+    if assist["velocity_full"] <= assist["velocity_threshold"]:
+        raise ValueError(
+            "gripper_assist.velocity_full must exceed velocity_threshold"
+        )
+    if assist["speed_limit"] <= assist["velocity_full"]:
+        raise ValueError("gripper_assist.speed_limit must exceed velocity_full")
 
 
 def _positive_scalar(value: Any, label: str) -> float:
@@ -178,6 +222,23 @@ def _positive_scalar(value: Any, label: str) -> float:
         raise ValueError(f"{label} must be a positive number") from exc
     if not math.isfinite(result) or result <= 0.0:
         raise ValueError(f"{label} must be a positive finite number")
+    return result
+
+
+def _nonnegative_scalar(value: Any, label: str) -> float:
+    try:
+        result = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label} must be a non-negative number") from exc
+    if not math.isfinite(result) or result < 0.0:
+        raise ValueError(f"{label} must be a non-negative finite number")
+    return result
+
+
+def _unit_scalar(value: Any, label: str) -> float:
+    result = _nonnegative_scalar(value, label)
+    if result > 1.0:
+        raise ValueError(f"{label} must be between 0 and 1")
     return result
 
 
@@ -256,6 +317,13 @@ def _runtime_vector(value: Any, size: int, label: str) -> list[float]:
         return values * size
     if len(values) != size:
         raise ValueError(f"{label} must be a scalar or {size} values")
+    return values
+
+
+def _nonnegative_vector(value: Any, size: int, label: str) -> list[float]:
+    values = _runtime_vector(value, size, label)
+    if any(not math.isfinite(item) or item < 0.0 for item in values):
+        raise ValueError(f"{label} values must be non-negative and finite")
     return values
 
 

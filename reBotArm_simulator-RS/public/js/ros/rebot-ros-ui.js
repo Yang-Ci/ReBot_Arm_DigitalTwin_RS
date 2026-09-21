@@ -63,6 +63,10 @@
     gravityStart: `/${NS}/gravity_compensation/start`,
     gravityStop: `/${NS}/gravity_compensation/stop`,
     gravityStatus: `/${NS}/gravity_compensation/status`,
+    gripperRelease: `/${NS}/gripper/release`,
+    gripperHold: `/${NS}/gripper/hold`,
+    gripperAssistStart: `/${NS}/gripper/assist/start`,
+    gripperAssistStatus: `/${NS}/gripper/assist/status`,
     recordStart: `/${NS}/mujoco/record/start`,
     recordStop: `/${NS}/mujoco/record/stop`,
     recordReplay: `/${NS}/mujoco/record/replay`,
@@ -87,11 +91,15 @@
     disable: document.getElementById('ros-disable'),
     safeHome: document.getElementById('ros-safe-home'),
     gravityStatus: document.getElementById('ros-gravity-status'),
+    gripperMode: document.getElementById('ros-gripper-mode'),
     gravityStart: document.getElementById('ros-gravity-start'),
     gravityStop: document.getElementById('ros-gravity-stop'),
     gravityQuery: document.getElementById('ros-gravity-status-query'),
    rosOpenGripper: document.getElementById('ros-open-gripper'),
    closeGripper: document.getElementById('ros-close-gripper'),
+   releaseGripper: document.getElementById('ros-release-gripper'),
+   assistGripper: document.getElementById('ros-assist-gripper'),
+   holdGripper: document.getElementById('ros-hold-gripper'),
    clearLog: document.getElementById('ros-clear-log'),
    log: document.getElementById('ros-log'),
    cameraCanvas: document.getElementById('ros-camera-canvas'),
@@ -116,7 +124,9 @@
    checkIk: document.getElementById('ros-check-ik'),
    stopPath: document.getElementById('stop-path'),
    teachHardwareRecord: document.getElementById('teach-hardware-record'),
-   teachHardwareModeRow: document.getElementById('teach-hardware-mode-row')
+   teachHardwareModeRow: document.getElementById('teach-hardware-mode-row'),
+   teachHomeGripperRow: document.getElementById('teach-home-gripper-row'),
+   teachHomeGripperMode: document.getElementById('teach-home-gripper-mode')
   };
 
  if (!window.ReBotRosClient || !els.connect) return;
@@ -139,6 +149,7 @@
   if (els.targetTitle) els.targetTitle.textContent = `${TARGET.label}连接`;
   if (els.teachHardwareRecord) els.teachHardwareRecord.hidden = TARGET_KEY !== 'hardware';
   if (els.teachHardwareModeRow) els.teachHardwareModeRow.hidden = TARGET_KEY !== 'hardware';
+  if (els.teachHomeGripperRow) els.teachHomeGripperRow.hidden = TARGET_KEY !== 'hardware';
   if (els.mirrorLabel) {
     els.mirrorLabel.textContent = TARGET_KEY === 'simulation'
       ? '镜像 RS MuJoCo 实际状态到网页'
@@ -212,6 +223,11 @@
   let gravityCompensationActive = false;
   let gravityStatusSource = 'initial';
   let gravityStatusPollInFlight = false;
+  let gripperAssistPollInFlight = false;
+  let gripperAssistActive = false;
+  let gripperManualFree = false;
+  let activeTeachingGripperReplay = null;
+  let activePresetTransition = null;
   // Multi-joint hardware motions use one shared requestAnimationFrame
   // renderer.  Keeping all links on the same feedback timeline prevents a
   // preset/replay from looking like seven independent, stepped animations.
@@ -323,6 +339,43 @@
   els.gravityQuery.addEventListener('click', queryGravityCompensation);
  els.rosOpenGripper.addEventListener('click', () => sendGripper(OPEN_GRIPPER_M, { requireControl: true }));
  els.closeGripper.addEventListener('click', () => sendGripper(CLOSE_GRIPPER_M, { requireControl: true }));
+ els.releaseGripper?.addEventListener('click', async () => {
+   const result = await guardedOptionalService(
+     REQUIRED_SERVICES.gripperRelease,
+     () => client.releaseGripper(),
+     t('msg.reqGripperRelease')
+   );
+   if (result && result.success !== false) {
+     gripperAssistActive = false;
+     gripperManualFree = true;
+   }
+   updateGripperModeDisplay();
+ });
+ els.assistGripper?.addEventListener('click', async () => {
+   if (!window.confirm(t('msg.gripperAssistConfirm'))) return;
+   const result = await guardedOptionalService(
+     REQUIRED_SERVICES.gripperAssistStart,
+     () => client.startGripperAssist(),
+     t('msg.reqGripperAssist')
+   );
+   if (result && result.success !== false) {
+     gripperAssistActive = true;
+     gripperManualFree = false;
+   }
+   updateGripperModeDisplay();
+ });
+ els.holdGripper?.addEventListener('click', async () => {
+   const result = await guardedOptionalService(
+     REQUIRED_SERVICES.gripperHold,
+     () => client.holdGripper(),
+     t('msg.reqGripperHold')
+   );
+   if (result && result.success !== false) {
+     gripperAssistActive = false;
+     gripperManualFree = false;
+   }
+   updateGripperModeDisplay();
+ });
  els.clearLog.addEventListener('click', () => { els.log.innerHTML = ''; });
   els.checkIk.addEventListener('click', checkIk);
   document.getElementById('ros-help-top')?.addEventListener('click', () => document.getElementById('ros-help-dialog')?.showModal());
@@ -347,7 +400,17 @@
   if (els.visionPlaceDemo) els.visionPlaceDemo.addEventListener('click', requestVisionPlace);
   if (els.stopPath) {
     els.stopPath.addEventListener('click', () => {
+      if (activeTeachingGripperReplay) activeTeachingGripperReplay.cancelled = true;
+      if (activePresetTransition) activePresetTransition.cancelled = true;
       cancelLowLevelPlayback();
+      if (
+        window.reBotSim
+        && typeof window.reBotSim.isTeachingReplayActive === 'function'
+        && window.reBotSim.isTeachingReplayActive()
+        && typeof window.reBotSim.stopTeachingReplay === 'function'
+      ) {
+        window.reBotSim.stopTeachingReplay();
+      }
       writeLog('已请求停止低层回放', 'warn');
     });
   }
@@ -383,6 +446,7 @@
   updateDiagnostics();
   window.setInterval(updateDiagnostics, 1000);
   window.setInterval(pollGravityCompensationStatus, 500);
+  window.setInterval(pollGripperAssistStatus, 750);
 
   function handleJointStates(msg) {
     if (!window.reBotSim || !Array.isArray(msg.name) || !Array.isArray(msg.position)) return;
@@ -390,7 +454,11 @@
     const useDriverState = TARGET_KEY !== 'simulation' || !mujocoStateIsFresh();
 
     if (hardwareTeachActive && typeof window.reBotSim.appendHardwareTeachingSample === 'function') {
-      window.reBotSim.appendHardwareTeachingSample(next, msg.header && msg.header.stamp);
+      window.reBotSim.appendHardwareTeachingSample(
+        next,
+        msg.header && msg.header.stamp,
+        latestGripperPosition
+      );
     }
 
     if (useDriverState && Object.keys(next).length) {
@@ -885,6 +953,21 @@
     if (useDriverState && typeof msg.velocity === 'number') {
       latestGripperVelocity = Math.abs(msg.velocity) * OPEN_GRIPPER_M / OPEN_GRIPPER_MOTOR_RAD;
     }
+    updateGripperModeDisplay();
+    if (
+      useDriverState
+      && hardwareTeachActive
+      && latestJointPositions
+      && typeof msg.position === 'number'
+      && window.reBotSim
+      && typeof window.reBotSim.appendHardwareTeachingSample === 'function'
+    ) {
+      window.reBotSim.appendHardwareTeachingSample(
+        latestJointPositions,
+        msg.header && msg.header.stamp,
+        gripperMotorToWidth(msg.position)
+      );
+    }
     if (useDriverState && els.mirror.checked && window.reBotSim && typeof msg.position === 'number') {
       const width = gripperMotorToWidth(msg.position);
       if (TARGET_KEY === 'hardware' && hardwareBatchFeedbackActive) {
@@ -992,6 +1075,14 @@
       setStatus('closed', t('msg.rosNotConnected'));
       return;
     }
+    if (
+      window.reBotSim
+      && typeof window.reBotSim.isTeachingReplayActive === 'function'
+      && window.reBotSim.isTeachingReplayActive()
+    ) {
+      setMessage('回放中，请先停止或等待完成');
+      return;
+    }
     if (!controlAllowed(true)) return;
     if (!latestJointPositions || performance.now() - latestJointStateAt > 500) {
       setMessage('等待 /joint_states 反馈后再开始真机示教');
@@ -1010,8 +1101,15 @@
       if (!result || result.success === false || result.accepted === false) return;
       hardwareTeachActive = true;
       hardwareTeachGravityStarted = true;
+      gripperAssistActive = true;
+      gripperManualFree = false;
+      updateGripperModeDisplay();
       if (!els.mirror.checked) els.mirror.checked = true;
-      window.reBotSim.beginHardwareTeaching();
+      if (!window.reBotSim.beginHardwareTeaching()) {
+        window.reBotSim.stopTeachingReplay();
+        await stopHardwareTeaching(true, { returnHome: false });
+        return;
+      }
       writeLog('真机推动示教开始：直接记录 /joint_states 原始位置', 'ok');
     } finally {
       hardwareTeachBusy = false;
@@ -1028,6 +1126,9 @@
     }
     const shouldStopGravity = Boolean(stopGravity) && hardwareTeachGravityStarted && client.connected;
     const shouldReturnHome = Boolean(options && options.returnHome) && client.connected;
+    const shouldCloseGripperAfterHome = shouldReturnHome
+      && els.teachHomeGripperMode
+      && els.teachHomeGripperMode.value === 'close';
     hardwareTeachGravityStarted = false;
     hardwareTeachBusy = shouldStopGravity || shouldReturnHome;
     updateHardwareTeachUi(shouldReturnHome ? t('sim.hardwareTeachHoming') : undefined);
@@ -1048,13 +1149,25 @@
       if (shouldReturnHome && gravityStopped && client.connected) {
         cancelLowLevelPlayback();
         resetWebControlState();
-        await guardedCall(
+        const homeResult = await guardedCall(
           () => client.safeHome(),
           t('msg.teachSafeHome'),
           true,
           { keepConnectionStatus: true }
         );
         resetWebControlState();
+        if (
+          shouldCloseGripperAfterHome
+          && homeResult
+          && homeResult.success !== false
+          && client.connected
+        ) {
+          await commandGripperAndWait(
+            CLOSE_GRIPPER_M,
+            '机械臂已回零，正在闭合夹爪',
+            { minWaitMs: 350, requireReached: false }
+          );
+        }
       }
     } finally {
       hardwareTeachBusy = false;
@@ -1332,19 +1445,32 @@
       : `TCP 示教回放（${waypoints.length} 点 / ${recordedDuration.toFixed(1)} 秒）`;
     let success = false;
     let message = '真机示教回放失败，请查看 ROS 日志';
+    const gripperReplay = { cancelled: false };
+    activeTeachingGripperReplay = gripperReplay;
+    let gripperTask = Promise.resolve(true);
     try {
-      const result = await sendTrajectory(
+      const trajectoryTask = sendTrajectory(
         points,
         label,
         endpointOnly ? undefined : { profile: 'teaching-replay' }
       );
+      gripperTask = replayTeachingGripper(waypoints, endpointOnly, gripperReplay);
+      const result = await trajectoryTask;
       success = result === true || Boolean(
         result && result.success !== false && result.accepted !== false
       );
+      if (success) {
+        success = await gripperTask;
+      } else {
+        gripperReplay.cancelled = true;
+        await gripperTask;
+      }
       if (success) message = endpointOnly ? '已用 3 秒运动到示教最终位置' : '真机示教回放完成';
     } catch (error) {
       writeLog(`真机示教回放失败：${error && error.message ? error.message : error}`, 'error');
     } finally {
+      gripperReplay.cancelled = true;
+      if (activeTeachingGripperReplay === gripperReplay) activeTeachingGripperReplay = null;
       hardwareBatchFeedbackActive = false;
       if (hardwareBatchFinishTimer) window.clearTimeout(hardwareBatchFinishTimer);
       hardwareBatchFinishTimer = 0;
@@ -1354,6 +1480,58 @@
       }
     }
     if (typeof command.complete === 'function') command.complete(success, message);
+  }
+
+  async function replayTeachingGripper(waypoints, endpointOnly, playback) {
+    const events = buildTeachingGripperEvents(waypoints, endpointOnly);
+    if (!events.length) return true;
+    const startedAt = performance.now();
+    for (const event of events) {
+      const deadline = startedAt + event.t;
+      while (performance.now() < deadline) {
+        if (playback.cancelled || !client.connected || !els.control.checked) return false;
+        await sleep(Math.min(60, deadline - performance.now()));
+      }
+      if (playback.cancelled || !client.connected || !els.control.checked) return false;
+      publishTeachingReplayGripper(event.position);
+    }
+    return true;
+  }
+
+  function buildTeachingGripperEvents(waypoints, endpointOnly) {
+    const samples = waypoints
+      .map((point) => ({
+        t: Math.max(0, Number(point.t) || 0),
+        position: Number(point.joints && point.joints.gripper)
+      }))
+      .filter((point) => Number.isFinite(point.position))
+      .map((point) => ({
+        ...point,
+        position: clamp(point.position, CLOSE_GRIPPER_M, OPEN_GRIPPER_M)
+      }));
+    if (!samples.length) return [];
+    if (endpointOnly) return [samples[samples.length - 1]];
+
+    const events = [{ ...samples[0], t: 0 }];
+    let last = events[0];
+    samples.slice(1, -1).forEach((sample) => {
+      if (Math.abs(sample.position - last.position) >= 0.0015 || sample.t - last.t >= 180) {
+        events.push(sample);
+        last = sample;
+      }
+    });
+    const finalSample = samples[samples.length - 1];
+    if (finalSample.t > last.t || Math.abs(finalSample.position - last.position) >= 0.0005) {
+      events.push(finalSample);
+    }
+    return events;
+  }
+
+  function publishTeachingReplayGripper(position) {
+    publishGripperWidthCommand(position);
+    simTargetAngles.set('gripper', position);
+    mirrorHoldUntil.set('gripper', performance.now() + 500);
+    syncSimGripper(position);
   }
 
   function queueDampedSliderCommand(command) {
@@ -1555,6 +1733,11 @@
       if (latestJointPositions) queueHardwareFeedbackFrame(latestJointPositions);
     }
 
+    if (command.source === 'preset') {
+      void runSmoothPresetTransition(command, joints);
+      return;
+    }
+
     names.forEach((name) => {
       lastSent.set(name, 0);
       if (name === 'gripper') {
@@ -1580,6 +1763,82 @@
       }
     }
     writeLog(t('log.jointBatch', { label: command.label || command.source || t('log.batchDefault'), n: names.length }), 'ok');
+  }
+
+  async function runSmoothPresetTransition(command, joints) {
+    if (activePresetTransition) {
+      const message = '姿态预设正在平滑切换，请等待当前动作完成';
+      setMessage(message);
+      writeLog(message, 'warn');
+      if (window.reBotSim && typeof window.reBotSim.setGhostVisible === 'function') {
+        window.reBotSim.setGhostVisible(false);
+      }
+      return;
+    }
+
+    const start = getCurrentRosPositions();
+    const goal = JOINT_NAMES.map((name, index) => {
+      const value = Number(joints[name]);
+      return Number.isFinite(value) ? value : start[index];
+    });
+    const maxDelta = goal.reduce(
+      (largest, value, index) => Math.max(largest, Math.abs(value - start[index])),
+      0
+    );
+    const requestedDuration = clamp(Number(command.duration_ms) / 1000 || getTrajectoryDuration(), 1, 30);
+    // Smoothstep peaks at 1.5 times its average speed. Keep a little margin
+    // below the controller's 0.60 rad/s general action limit so it does not
+    // need to retime a preset differently from the synchronized gripper.
+    const duration = clamp(
+      Math.max(requestedDuration, 1.5 * maxDelta / 0.55),
+      1,
+      30
+    );
+    const playback = { cancelled: false };
+    activePresetTransition = playback;
+    const gripperGoal = Number(joints.gripper);
+    const gripperStart = readGripperFeedbackPosition(gripperGoal);
+    const points = buildSmoothJointMovePoints(start, goal, duration);
+    const label = `${command.label || '姿态预设'}（平滑 ${duration.toFixed(1)} 秒）`;
+
+    try {
+      const trajectoryTask = sendTrajectory(points, label);
+      const gripperTask = Number.isFinite(gripperGoal)
+        ? replaySmoothPresetGripper(gripperStart, gripperGoal, duration, playback)
+        : Promise.resolve(true);
+      const result = await trajectoryTask;
+      const armSucceeded = result === true || Boolean(
+        result && result.success !== false && result.accepted !== false
+      );
+      if (!armSucceeded) playback.cancelled = true;
+      await gripperTask;
+      if (armSucceeded && !playback.cancelled) {
+        writeLog(`${command.label || '姿态预设'}平滑切换完成`, 'ok');
+      }
+    } catch (error) {
+      const message = `${command.label || '姿态预设'}切换失败：${error && error.message ? error.message : error}`;
+      setMessage(message);
+      writeLog(message, 'error');
+    } finally {
+      playback.cancelled = true;
+      if (activePresetTransition === playback) activePresetTransition = null;
+    }
+  }
+
+  async function replaySmoothPresetGripper(start, goal, duration, playback) {
+    const from = clamp(Number(start), CLOSE_GRIPPER_M, OPEN_GRIPPER_M);
+    const to = clamp(Number(goal), CLOSE_GRIPPER_M, OPEN_GRIPPER_M);
+    if (!Number.isFinite(from) || !Number.isFinite(to)) return false;
+    const startedAt = performance.now();
+    const durationMs = Math.max(1, duration * 1000);
+    while (!playback.cancelled) {
+      const ratio = clamp((performance.now() - startedAt) / durationMs, 0, 1);
+      const eased = ratio * ratio * (3 - 2 * ratio);
+      publishTeachingReplayGripper(from + (to - from) * eased);
+      if (ratio >= 1) return true;
+      await sleep(50);
+    }
+    return false;
   }
 
  async function checkIk() {
@@ -1661,6 +1920,40 @@
     }
   }
 
+  async function pollGripperAssistStatus() {
+    if (
+      !client.connected
+      || gripperAssistPollInFlight
+      || !listedServices.has(REQUIRED_SERVICES.gripperAssistStatus)
+    ) return;
+    gripperAssistPollInFlight = true;
+    try {
+      const result = await client.gripperAssistStatus();
+      gripperAssistActive = Boolean(result && result.success);
+      gripperManualFree = Boolean(
+        result
+        && typeof result.message === 'string'
+        && result.message.includes('released for manual')
+      );
+      updateGripperModeDisplay();
+    } catch (_error) {
+      // Connection diagnostics report transport failures; retain the last
+      // confirmed mode here so the safety label does not flicker.
+    } finally {
+      gripperAssistPollInFlight = false;
+    }
+  }
+
+  function updateGripperModeDisplay() {
+    if (!els.gripperMode) return;
+    els.gripperMode.textContent = gripperAssistActive
+      ? t('ros.gripperModeAssist')
+      : (gripperManualFree ? t('ros.gripperModeFree') : t('ros.gripperModeHolding'));
+    els.gripperMode.style.color = gripperAssistActive
+      ? '#ffd27a'
+      : (gripperManualFree ? '#d7fff4' : '#ffe0b0');
+  }
+
   async function runDiagnostics() {
     updateDiagnostics();
     if (!client.connected) {
@@ -1708,25 +2001,12 @@
   }
 
   function buildTeachingTrajectoryPoints(waypoints) {
-    // The browser playback clock starts at t=0 from its current pose. Use the
-    // same origin for the action instead of adding a hidden 50 ms hold.
+    // prepareTeachingReplay already includes the safety lead-in in point.t.
+    // Start from live feedback and do not add that lead-in a second time.
     const points = [makeTrajectoryPointAtNs(getCurrentRosPositions(), 0n)];
-    const firstStampNs = validRosStamp(waypoints[0] && waypoints[0].stamp)
-      ? rosStampToNs(waypoints[0].stamp)
-      : null;
-    const leadNs = millisecondsToNs(waypoints[0] ? waypoints[0].t : 0);
     let previousNs = 0n;
     waypoints.forEach((point) => {
-      const pointStampNs = validRosStamp(point.stamp) ? rosStampToNs(point.stamp) : null;
-      let relativeNs;
-      if (pointStampNs !== null && firstStampNs !== null) {
-        relativeNs = pointStampNs - firstStampNs;
-      } else if (validRosStamp(point.time_from_start)) {
-        relativeNs = rosStampToNs(point.time_from_start);
-      } else {
-        relativeNs = millisecondsToNs(point.t);
-      }
-      const desiredNs = leadNs + relativeNs;
+      const desiredNs = millisecondsToNs(point.t);
       const timeNs = desiredNs > previousNs ? desiredNs : previousNs + 1n;
       points.push(makeTrajectoryPointAtNs(
         JOINT_NAMES.map((name) => Number(point.joints[name]) || 0),
@@ -3327,6 +3607,9 @@
   }
 
   function publishGripperWidthCommand(width) {
+    gripperAssistActive = false;
+    gripperManualFree = false;
+    updateGripperModeDisplay();
     client.publishGripperCommand(gripperWidthToMotor(width), GRIPPER_VLIM_RAD_S);
   }
 

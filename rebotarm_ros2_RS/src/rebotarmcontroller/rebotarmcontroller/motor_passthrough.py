@@ -128,6 +128,7 @@ class MotorPassthrough:
             if not self._can_send_lowlevel(
                 f"/gripper/{label}",
                 allow_preempt=False,
+                allow_during_trajectory=True,
             ):
                 return
 
@@ -140,12 +141,20 @@ class MotorPassthrough:
 
         return _callback
 
-    def _can_send_lowlevel(self, label: str, *, allow_preempt: bool) -> bool:
+    def _can_send_lowlevel(
+        self,
+        label: str,
+        *,
+        allow_preempt: bool,
+        allow_during_trajectory: bool = False,
+    ) -> bool:
         state = self._hardware.state_machine
         if state in ("GRAVITY_COMP", "SAFE_HOMING"):
             self._node.get_logger().warn(f"rejecting {label} in state {state}")
             return False
         if state == "TRAJ_RUNNING":
+            if allow_during_trajectory:
+                return True
             if self._arbitration == "reject" or not allow_preempt:
                 self._node.get_logger().warn(
                     f"rejecting {label} while trajectory is running"

@@ -11,14 +11,14 @@ from .hardware_config import resolve_hardware_config
 from .motion_profiles import advance_jerk_limited_reference_over_elapsed
 
 _GRIPPER_GOAL_TOLERANCE_RAD = 0.12
-_GRIPPER_CLOSED_POSITION = 0.0
 _DEFAULT_JOINT_POS_VEL_VLIM_RAD_S = 1.20
 _MAX_JOINT_POS_VEL_VLIM_RAD_S = 1.50
 _DEFAULT_GRIPPER_POS_VEL_VLIM_RAD_S = 5.0
 _MAX_GRIPPER_POS_VEL_VLIM_RAD_S = 5.0
-_SAFE_HOME_GRIPPER_VLIM_RAD_S = 3.0
 _SAFE_HOME_TOLERANCE_RAD = np.deg2rad(2.0)
 _SAFE_HOME_VELOCITY_TOLERANCE_RAD_S = 0.15
+_GRIPPER_ASSIST_TORQUE_MAX_NM = 0.08
+_GRIPPER_ASSIST_LIMIT_MARGIN_RAD = 0.12
 
 
 def _locked(method):
@@ -95,6 +95,16 @@ class HardwareManager:
             if self.has_gripper and self._gripper_group.joint_names
             else ""
         )
+        self._gripper_mit_kp = (
+            np.array(getattr(self._gripper_group, "_mit_kp"), dtype=np.float64)
+            if self.has_gripper
+            else np.zeros(0, dtype=np.float64)
+        )
+        self._gripper_mit_kd = (
+            np.array(getattr(self._gripper_group, "_mit_kd"), dtype=np.float64)
+            if self.has_gripper
+            else np.zeros(0, dtype=np.float64)
+        )
         gripper_limits = hardware_data.get("gripper", {}).get("position_limits", {})
         self.gripper_open_position = float(gripper_limits.get("open", 0.0))
         self.gripper_close_position = float(gripper_limits.get("close", 0.0))
@@ -117,6 +127,27 @@ class HardwareManager:
             gc_runtime["tau_scale"],
             dtype=np.float64,
         )
+        self._gravity_comp_torque_limit = np.array(
+            gc_runtime["torque_limit"],
+            dtype=np.float64,
+        )
+        assist_runtime = runtime_config["gripper_assist"]
+        self._gripper_assist_torque = float(
+            np.clip(
+                assist_runtime["torque"],
+                0.0,
+                _GRIPPER_ASSIST_TORQUE_MAX_NM,
+            )
+        )
+        self._gripper_assist_kd = float(np.clip(assist_runtime["kd"], 0.0, 0.2))
+        self._gripper_assist_velocity_threshold = float(
+            assist_runtime["velocity_threshold"]
+        )
+        self._gripper_assist_velocity_full = float(assist_runtime["velocity_full"])
+        self._gripper_assist_speed_limit = float(assist_runtime["speed_limit"])
+        self._gripper_assist_breakaway_fraction = float(
+            np.clip(assist_runtime["breakaway_fraction"], 0.0, 0.5)
+        )
 
         self._connected = False
         self._enabled = False
@@ -128,6 +159,11 @@ class HardwareManager:
         self._gravity_comp_q_last: np.ndarray | None = None
         self._gravity_comp_transition_q_hold: np.ndarray | None = None
         self._gravity_comp_transition_started_at: float | None = None
+        self._gravity_comp_fault = ""
+        self._gripper_manual_free = False
+        self._gripper_assist_active = False
+        self._gripper_assist_velocity = 0.0
+        self._gripper_hold_position: float | None = None
         self._cached_arm_position = np.zeros(len(self.joint_names), dtype=np.float64)
         self._cached_arm_velocity = np.zeros(len(self.joint_names), dtype=np.float64)
         self._cached_arm_torque = np.zeros(len(self.joint_names), dtype=np.float64)
@@ -426,18 +462,16 @@ class HardwareManager:
     def safe_home(self) -> None:
         with self._cmd_lock:
             self.stop_motion()
-            # A previous browser stream may still contain open-gripper or arm
-            # targets.  Clear every low-level target before homing so the
-            # periodic holding loop cannot restore stale commands afterwards.
+            # A previous browser stream may still contain arm targets. Clear
+            # them before homing, but preserve the measured J7 pose: closing a
+            # hand-positioned gripper implicitly can drop or pinch an object.
             self._lowlevel_pos_target = None
             self._mit_stream_target = None
             self._mit_stream_velocity.fill(0.0)
             self._mit_stream_acceleration.fill(0.0)
             self._mit_gripper_target = None
             if self.has_gripper:
-                gripper_position = self.get_gripper_state()[0]
-                self._gripper_target_position = gripper_position
-                self._endpos_ctrl._gripper_target = gripper_position
+                self._hold_gripper_current_locked()
             self.set_state_machine("IDLE")
             if self._gravity_comp_active:
                 if self._arm_control_mode == "mit" and self.control_loop_active:
@@ -455,10 +489,7 @@ class HardwareManager:
                     self._send_endpos_hold_once()
                     self._robot._ctrl_fn = self._endpos_loop_cb
                     self._gravity_comp_active = False
-                    self._gravity_comp_q_target = None
-                    self._gravity_comp_q_last = None
-                    self._gravity_comp_transition_q_hold = None
-                    self._gravity_comp_transition_started_at = None
+                    self._clear_gravity_compensation_state()
                 else:
                     self.stop_gravity_compensation()
             else:
@@ -466,51 +497,12 @@ class HardwareManager:
             self.set_state_machine("SAFE_HOMING")
             self._homing_thread = threading.get_ident()
         try:
-            if self.has_gripper:
-                self._move_gripper_for_safe_home()
             self._endpos_ctrl.safe_home()
         finally:
             if self.has_gripper:
                 self._mit_gripper_target = None
             self._homing_thread = None
             self.set_state_machine("IDLE")
-
-    def _move_gripper_for_safe_home(self) -> bool:
-        """Close the gripper at the dedicated safe-home speed."""
-        with self._cmd_lock:
-            current = self.get_gripper_state()[0]
-            self._endpos_ctrl._gripper_target = current
-            self._mit_gripper_target = _GRIPPER_CLOSED_POSITION
-            self._mit_gripper_vlim = _SAFE_HOME_GRIPPER_VLIM_RAD_S
-            self._gripper_target_position = _GRIPPER_CLOSED_POSITION
-
-        travel_time = abs(current - _GRIPPER_CLOSED_POSITION) / max(
-            _SAFE_HOME_GRIPPER_VLIM_RAD_S,
-            0.05,
-        )
-        deadline = time.monotonic() + max(2.0, travel_time + 1.0)
-        reached = False
-        last_position = current
-        while time.monotonic() < deadline:
-            # The ROS state publisher already refreshes all seven motors at
-            # hardware_feedback_poll_rate.  A synchronous read here used to
-            # request the whole arm every 20 ms, contending with the shared CAN
-            # transport and starving the 125 Hz MIT sender that actually moves
-            # the gripper.  Safe-home only needs the newest cached J7 value.
-            last_position = self.get_gripper_state(request_feedback=False)[0]
-            if abs(last_position - _GRIPPER_CLOSED_POSITION) < _GRIPPER_GOAL_TOLERANCE_RAD:
-                reached = True
-                break
-            time.sleep(0.05)
-
-        with self._cmd_lock:
-            self._mit_gripper_target = None
-            hold_position = (
-                _GRIPPER_CLOSED_POSITION if reached else float(last_position)
-            )
-            self._endpos_ctrl._gripper_target = hold_position
-            self._gripper_target_position = hold_position
-        return reached
 
     @_locked
     def set_zero(self, joint_name: str = "") -> bool:
@@ -678,6 +670,11 @@ class HardwareManager:
         self._gravity_comp_q_last = q_hold.copy()
         self._gravity_comp_transition_q_hold = q_hold.copy()
         self._gravity_comp_transition_started_at = None
+        self._gravity_comp_fault = ""
+        self._error_codes = [
+            code for code in self._error_codes
+            if not code.startswith("GRAVITY_COMP_FAULT:")
+        ]
 
         try:
             # Begin at the already-active position-hold gains.  The control
@@ -697,9 +694,14 @@ class HardwareManager:
                     self._gripper_group,
                     gripper_hold,
                     np.zeros_like(gripper_hold),
-                    getattr(self._gripper_group, "_mit_kp"),
-                    getattr(self._gripper_group, "_mit_kd"),
+                    self._gripper_mit_kp,
+                    self._gripper_mit_kd,
                 )
+                self._cached_gripper_position = float(gripper_hold[0])
+                self._gripper_hold_position = float(gripper_hold[0])
+                self._gripper_manual_free = False
+                self._gripper_assist_velocity = 0.0
+                self._gripper_assist_active = True
 
             if not self._enabled:
                 self._arm_group.enable()
@@ -725,21 +727,35 @@ class HardwareManager:
             self._gravity_comp_active = True
             arm_rate = float(getattr(self._robot, "_rate", 500.0))
             self._gravity_comp_tick(self._robot, 1.0 / arm_rate)
-            self._robot.start_control_loop(self._gravity_comp_tick, rate=arm_rate)
+            self._robot.start_control_loop(
+                self._gravity_comp_tick_guarded,
+                rate=arm_rate,
+            )
             self.set_state_machine("GRAVITY_COMP")
-        except Exception:
+        except Exception as exc:
+            self._gravity_comp_fault = f"{type(exc).__name__}: {exc}"
             self._gravity_comp_active = False
-            self._gravity_comp_q_target = None
-            self._gravity_comp_q_last = None
-            self._gravity_comp_transition_q_hold = None
-            self._gravity_comp_transition_started_at = None
+            self._clear_gravity_compensation_state(keep_fault=True)
             if self._enabled and not self.control_loop_active:
+                self._hold_gripper_current_locked()
                 self._start_endpos_hold(target=q_hold)
-            raise
+            self.set_state_machine("IDLE")
+            raise RuntimeError(
+                f"gravity compensation startup failed; restored position hold: {exc}"
+            ) from exc
 
     @_locked
     def stop_gravity_compensation(self) -> None:
         if not self._gravity_comp_active:
+            # An idempotent stop must not energize a disabled J7.  Only leave
+            # an explicitly requested free/assist mode when the robot is
+            # already enabled.
+            if (
+                self._enabled
+                and self.has_gripper
+                and (self._gripper_manual_free or self._gripper_assist_active)
+            ):
+                self._hold_gripper_current_locked()
             return
         hold_target = (
             self._gravity_comp_q_last.copy()
@@ -748,13 +764,25 @@ class HardwareManager:
         )
         self._robot.stop_control_loop()
         self._gravity_comp_active = False
+        self._clear_gravity_compensation_state()
+        self._error_codes = [
+            code for code in self._error_codes
+            if not code.startswith("GRAVITY_COMP_FAULT:")
+        ]
+        if self._enabled:
+            # Capture the hand-adjusted J7 pose before the normal holding loop
+            # resumes. Otherwise it would jump back to the pre-teach target.
+            self._hold_gripper_current_locked()
+            self._start_endpos_hold(target=hold_target)
+        self.set_state_machine("IDLE")
+
+    def _clear_gravity_compensation_state(self, *, keep_fault: bool = False) -> None:
         self._gravity_comp_q_target = None
         self._gravity_comp_q_last = None
         self._gravity_comp_transition_q_hold = None
         self._gravity_comp_transition_started_at = None
-        if self._enabled:
-            self._start_endpos_hold(target=hold_target)
-        self.set_state_machine("IDLE")
+        if not keep_fault:
+            self._gravity_comp_fault = ""
 
     def gravity_compensation_active(self) -> bool:
         return self._gravity_comp_active
@@ -762,6 +790,9 @@ class HardwareManager:
     def gravity_compensation_target(self) -> np.ndarray | None:
         target = self._gravity_comp_q_target
         return None if target is None else target.copy()
+
+    def gravity_compensation_fault(self) -> str:
+        return self._gravity_comp_fault
 
     def _gravity_comp_torque(self, q: np.ndarray) -> np.ndarray:
         q_for_model = q * self._gravity_comp_joint_direction
@@ -773,11 +804,22 @@ class HardwareManager:
             q_model,
             self._gc_data,
         )[: len(self.joint_names)]
-        return (
+        tau_motor = (
             tau_model
             * self._gravity_comp_joint_direction
             * self._gravity_comp_tau_scale
         )
+        configured_limits = getattr(
+            self,
+            "_gravity_comp_torque_limit",
+            np.zeros(len(self.joint_names), dtype=np.float64),
+        )
+        limits = np.where(
+            configured_limits > 0.0,
+            configured_limits,
+            np.inf,
+        )
+        return np.clip(tau_motor, -limits, limits)
 
     @staticmethod
     def _enter_group_mit_at_current(group, q_hold, tau_hold, kp, kd) -> None:
@@ -861,9 +903,60 @@ class HardwareManager:
             tau=tau_motor,
         )
         if self.has_gripper:
-            self._gripper_group.send_mit(
-                np.array([self._cached_gripper_position], dtype=np.float64)
+            self._send_gripper_guidance_tick()
+
+    def _gravity_comp_tick_guarded(self, robot, dt: float) -> None:
+        try:
+            self._gravity_comp_tick(robot, dt)
+        except Exception as exc:
+            fault = f"{type(exc).__name__}: {exc}"
+            self._gravity_comp_fault = fault
+            self._error_codes = [
+                code for code in self._error_codes
+                if not code.startswith("GRAVITY_COMP_FAULT:")
+            ]
+            self._error_codes.append(f"GRAVITY_COMP_FAULT: {fault}")
+            self._gravity_comp_active = False
+            recovery_target = (
+                self._gravity_comp_q_last.copy()
+                if self._gravity_comp_q_last is not None
+                else None
             )
+            # The SDK control loop cannot join itself. Ask it to exit and
+            # restore normal holding from a separate recovery thread.
+            robot._running = False
+            threading.Thread(
+                target=self._recover_from_gravity_compensation_fault,
+                args=(recovery_target,),
+                name="rebotarm-rs-gravity-recovery",
+                daemon=True,
+            ).start()
+
+    def _recover_from_gravity_compensation_fault(
+        self,
+        target: np.ndarray | None,
+    ) -> None:
+        control_thread = getattr(self._robot, "_ctrl_thread", None)
+        if (
+            control_thread is not None
+            and control_thread is not threading.current_thread()
+        ):
+            control_thread.join(timeout=1.0)
+        with self._cmd_lock:
+            self._clear_gravity_compensation_state(keep_fault=True)
+            try:
+                if self._enabled:
+                    self._hold_gripper_current_locked()
+                    self._start_endpos_hold(target=target)
+            except Exception as exc:
+                self._gravity_comp_fault += (
+                    f"; hold recovery failed: {type(exc).__name__}: {exc}"
+                )
+                self._error_codes = [
+                    f"GRAVITY_COMP_FAULT: {self._gravity_comp_fault}"
+                ]
+            finally:
+                self.set_state_machine("IDLE")
 
     def _gravity_comp_transition_gains(
         self, elapsed: float
@@ -893,6 +986,147 @@ class HardwareManager:
     # gripper
     # ------------------------------------------------------------------
 
+    def _gripper_assist_feedforward(self, position: float, velocity: float) -> float:
+        speed = abs(float(velocity))
+        if speed <= self._gripper_assist_velocity_threshold:
+            return 0.0
+        if speed >= self._gripper_assist_speed_limit:
+            return 0.0
+
+        direction = 1.0 if velocity > 0.0 else -1.0
+        lower = min(self.gripper_close_position, self.gripper_open_position)
+        upper = max(self.gripper_close_position, self.gripper_open_position)
+        if position <= lower + _GRIPPER_ASSIST_LIMIT_MARGIN_RAD and direction < 0.0:
+            return 0.0
+        if position >= upper - _GRIPPER_ASSIST_LIMIT_MARGIN_RAD and direction > 0.0:
+            return 0.0
+
+        ramp_span = max(
+            self._gripper_assist_velocity_full
+            - self._gripper_assist_velocity_threshold,
+            1e-6,
+        )
+        ramp = float(
+            np.clip(
+                (speed - self._gripper_assist_velocity_threshold) / ramp_span,
+                0.0,
+                1.0,
+            )
+        )
+        ramp = max(ramp, self._gripper_assist_breakaway_fraction)
+        return direction * self._gripper_assist_torque * ramp
+
+    def _send_gripper_guidance_tick(self) -> None:
+        if not self.has_gripper or self._gripper_manual_free:
+            return
+        position = float(self._cached_gripper_position)
+        if self._gripper_assist_active:
+            self._gripper_assist_velocity = (
+                0.70 * self._gripper_assist_velocity
+                + 0.30 * float(self._cached_gripper_velocity)
+            )
+            torque = self._gripper_assist_feedforward(
+                position,
+                self._gripper_assist_velocity,
+            )
+            self._gripper_group.send_mit(
+                np.array([position], dtype=np.float64),
+                vel=np.zeros(1, dtype=np.float64),
+                kp=np.zeros(1, dtype=np.float64),
+                kd=np.array([self._gripper_assist_kd], dtype=np.float64),
+                tau=np.array([torque], dtype=np.float64),
+            )
+            return
+
+        target = (
+            position
+            if self._gripper_hold_position is None
+            else self._gripper_hold_position
+        )
+        self._gripper_group.send_mit(
+            np.array([target], dtype=np.float64),
+            kp=self._gripper_mit_kp,
+            kd=self._gripper_mit_kd,
+        )
+
+    @_locked
+    def release_gripper_for_manual(self) -> None:
+        """Disable only J7 so the fingers can be positioned by hand."""
+        if not self.has_gripper:
+            return
+        if self._gripper_manual_free and not self._gripper_assist_active:
+            return
+        self.get_gripper_state(request_feedback=True)
+        self._gripper_assist_active = False
+        self._gripper_assist_velocity = 0.0
+        self._gripper_hold_position = None
+        self._gripper_target_position = None
+        self._gripper_group.disable()
+        self._gripper_manual_free = True
+
+    def _hold_gripper_current_locked(self) -> None:
+        if not self.has_gripper:
+            return
+        current = float(self._cached_gripper_position)
+        try:
+            current = float(self.get_gripper_state(request_feedback=True)[0])
+        except Exception:
+            pass
+        current = float(
+            np.clip(
+                current,
+                min(self.gripper_close_position, self.gripper_open_position),
+                max(self.gripper_close_position, self.gripper_open_position),
+            )
+        )
+        self._gripper_group.mode_mit(
+            kp=self._gripper_mit_kp,
+            kd=self._gripper_mit_kd,
+        )
+        self._gripper_group.enable()
+        self._gripper_group.send_mit(
+            np.array([current], dtype=np.float64),
+            kp=self._gripper_mit_kp,
+            kd=self._gripper_mit_kd,
+        )
+        self._cached_gripper_position = current
+        self._endpos_ctrl._gripper_target = current
+        self._gripper_target_position = current
+        self._gripper_hold_position = current
+        self._mit_gripper_target = None
+        self._gripper_manual_free = False
+        self._gripper_assist_active = False
+        self._gripper_assist_velocity = 0.0
+
+    @_locked
+    def hold_gripper_current(self) -> None:
+        """Hold the measured J7 pose without returning to a stale target."""
+        self._hold_gripper_current_locked()
+
+    @_locked
+    def start_gripper_assist(self) -> None:
+        """Enable conservative motion-following torque assistance for J7."""
+        if not self.has_gripper:
+            raise RuntimeError("gripper is not initialized")
+        self.get_gripper_state(request_feedback=True)
+        if not self.control_loop_active:
+            self._start_endpos_loop()
+        self._gripper_group.mode_mit(
+            kp=np.zeros(1, dtype=np.float64),
+            kd=np.array([self._gripper_assist_kd], dtype=np.float64),
+        )
+        self._gripper_group.enable()
+        self._gripper_manual_free = False
+        self._gripper_hold_position = None
+        self._gripper_assist_velocity = 0.0
+        self._gripper_assist_active = True
+
+    def gripper_assist_active(self) -> bool:
+        return bool(self._gripper_assist_active)
+
+    def gripper_manual_free(self) -> bool:
+        return bool(self._gripper_manual_free)
+
     @_locked
     def set_gripper_target(self, position: float) -> None:
         self._begin_gripper_command(allow_endpos=True)
@@ -900,8 +1134,8 @@ class HardwareManager:
         self._endpos_ctrl.set_gripper_target(target)
         self._gripper_group.send_mit(
             np.array([target], dtype=np.float64),
-            kp=getattr(self._gripper_group, "_mit_kp"),
-            kd=getattr(self._gripper_group, "_mit_kd"),
+            kp=self._gripper_mit_kp,
+            kd=self._gripper_mit_kd,
         )
         self._gripper_target_position = target
 
@@ -995,10 +1229,20 @@ class HardwareManager:
             and threading.get_ident() != self._homing_thread
         ):
             raise RuntimeError("rejecting gripper command during safe home")
-        if self.state_machine == "TRAJ_RUNNING":
+        if self.state_machine == "TRAJ_RUNNING" and not allow_endpos:
             raise RuntimeError("rejecting gripper command while trajectory is running")
         if not self.has_gripper or not self._gripper_name:
             raise RuntimeError("gripper is not initialized")
+        if self._gripper_manual_free or self._gripper_assist_active:
+            self._gripper_group.mode_mit(
+                kp=self._gripper_mit_kp,
+                kd=self._gripper_mit_kd,
+            )
+            self._gripper_group.enable()
+            self._gripper_manual_free = False
+            self._gripper_assist_active = False
+            self._gripper_assist_velocity = 0.0
+            self._gripper_hold_position = None
         if allow_endpos and not self.control_loop_active:
             # A gripper-only MIT command needs the shared periodic sender. Hold
             # the arm at its measured pose and clear the arm streaming state so
@@ -1056,6 +1300,14 @@ class HardwareManager:
         self.set_state_machine("LOWLEVEL_STREAMING")
 
     def _begin_gripper_lowlevel(self, required_mode: str) -> None:
+        # Teaching replay can update J7 several times per second while the arm
+        # trajectory uses the same command lock.  JointGroup.mode_mit() waits
+        # for hardware mode confirmation and includes setup delays, so calling
+        # it for every already-MIT sample starves the 125 Hz arm sender and
+        # makes the whole arm jerk.  A mode transition is only needed when the
+        # requested mode actually changes.
+        if getattr(self._gripper_group, "mode", None) == required_mode:
+            return
         self._enter_mode(self._gripper_group, required_mode, "gripper")
 
     @staticmethod
@@ -1105,7 +1357,10 @@ class HardwareManager:
             self._arm_group.mode_pos_vel()
         self._arm_group.enable()
         if self.has_gripper:
-            if not self._gripper_group.mode_mit():
+            if not self._gripper_group.mode_mit(
+                kp=self._gripper_mit_kp,
+                kd=self._gripper_mit_kd,
+            ):
                 raise RuntimeError("gripper did not enter mit mode")
             self._gripper_group.enable()
 
@@ -1185,11 +1440,16 @@ class HardwareManager:
                     vlim=getattr(self._arm_group, "_pv_vlim"),
                 )
             if self.has_gripper:
-                self._gripper_group.send_mit(
-                    np.array([self._endpos_ctrl._gripper_target]),
-                    kp=getattr(self._gripper_group, "_mit_kp"),
-                    kd=getattr(self._gripper_group, "_mit_kd"),
-                )
+                if self._gripper_manual_free:
+                    pass
+                elif self._gripper_assist_active:
+                    self._send_gripper_guidance_tick()
+                else:
+                    self._gripper_group.send_mit(
+                        np.array([self._endpos_ctrl._gripper_target]),
+                        kp=self._gripper_mit_kp,
+                        kd=self._gripper_mit_kd,
+                    )
         finally:
             self._cmd_lock.release()
 

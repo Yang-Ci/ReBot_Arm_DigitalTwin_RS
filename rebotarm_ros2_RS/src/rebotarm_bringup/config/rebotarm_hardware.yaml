@@ -45,6 +45,18 @@ models:
 
         # compliant gravity compensation so switching modes has no torque step.
         tau_scale: [1.0, 0.92, 0.98, 1.0, 1.0, 1.0]
+        # 0 disables the ROS-side clamp; the motor driver still enforces its
+        # own model-specific torque limits.
+        torque_limit: 0.0
         # Fade from the stiff hold gains to compliant gains without a sudden
         # loss of stiffness at gravity-compensation startup.
         transition_duration: 0.5
+      # Conservative hand-guidance for the 0..5 rad RS gripper. Assistance is
+      # zero at rest and near either travel limit, and is hard-clamped in code.
+      gripper_assist:
+        torque: 0.04
+        kd: 0.001
+        velocity_threshold: 0.02
+        velocity_full: 0.22
+        speed_limit: 0.8
+        breakaway_fraction: 0.30
