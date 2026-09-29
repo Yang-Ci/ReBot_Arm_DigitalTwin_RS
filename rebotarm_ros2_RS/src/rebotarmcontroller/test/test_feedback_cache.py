@@ -138,8 +138,7 @@ def test_idempotent_gravity_stop_does_not_enable_a_disabled_gripper():
     manager._gravity_comp_active = False
     manager._enabled = False
     manager._robot = SimpleNamespace(has_gripper=True)
-    manager._gripper_manual_free = True
-    manager._gripper_assist_active = False
+    manager._gripper_assist_active = True
     manager._hold_gripper_current_locked = lambda: (_ for _ in ()).throw(
         AssertionError("inactive stop must not energize a disabled gripper")
     )

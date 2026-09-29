@@ -32,10 +32,7 @@
 | Service | `/rebotarm/gripper/set` | `rebotarm_msgs/srv/SetGripper` | 设置夹爪电机位置 |
 | Service | `/rebotarm/gripper/open` | `rebotarm_msgs/srv/GripperCommand` | 打开夹爪到指定或默认位置 |
 | Service | `/rebotarm/gripper/close` | `rebotarm_msgs/srv/GripperCommand` | 闭合夹爪到指定或默认位置 |
-| Service | `/rebotarm/gripper/release` | `std_srvs/srv/Trigger` | 单独失能 J7，便于手动调整 |
-| Service | `/rebotarm/gripper/hold` | `std_srvs/srv/Trigger` | 在当前 J7 测量位置恢复保持 |
-| Service | `/rebotarm/gripper/assist/start` | `std_srvs/srv/Trigger` | 启动夹爪低阻随动助力 |
-| Service | `/rebotarm/gripper/assist/status` | `std_srvs/srv/Trigger` | 查询夹爪助力/释放/保持状态 |
+| Service | `/rebotarm/gripper/assist/status` | `std_srvs/srv/Trigger` | 查询夹爪助力/保持状态 |
 | Service | `/rebotarm/gravity_compensation/start` | `std_srvs/srv/Trigger` | 启动 controller 内部重力补偿 |
 | Service | `/rebotarm/gravity_compensation/stop` | `std_srvs/srv/Trigger` | 停止 controller 内部重力补偿 |
 | Service | `/rebotarm/gravity_compensation/status` | `std_srvs/srv/Trigger` | 查询重力补偿和最近故障 |
@@ -484,21 +481,18 @@ std_srvs/srv/Trigger
 ros2 service call /rebotarm/gravity_compensation/stop std_srvs/srv/Trigger
 ```
 
-### 夹爪手动调整服务
+### 夹爪低阻模式
 
-以下服务都使用 `std_srvs/srv/Trigger`：
+启动重力补偿时，J7 自动进入低阻随动助力；停止重力补偿时，J7 自动在当前测量位置恢复保持。不需要手动切换模式。
+
+查询状态：
 
 ```bash
-ros2 service call /rebotarm/gripper/release std_srvs/srv/Trigger
-ros2 service call /rebotarm/gripper/assist/start std_srvs/srv/Trigger
 ros2 service call /rebotarm/gripper/assist/status std_srvs/srv/Trigger
-ros2 service call /rebotarm/gripper/hold std_srvs/srv/Trigger
 ```
 
-- `release` 只失能 J7，机械臂其余关节继续当前控制；释放前应取下负载并避开夹点。
-- `assist/start` 用低刚度 MIT 模式跟随已发生的手动运动，静止、限位附近和过速时不施加助力。
-- `hold` 读取 J7 当前位置并恢复普通位置保持。
-- `assist/status` 的 `success=true` 表示助力正在运行；`message` 还会区分已释放和位置保持状态。
+- `assist/status` 的 `success=true` 表示助力正在运行；否则 `message` 报告位置保持状态。
+- 低阻模式只在检测到手动运动时施加小力矩，静止、限位附近和过速时不施加助力。
 
 ## 4. Action API
 

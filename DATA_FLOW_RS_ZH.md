@@ -118,8 +118,8 @@ flowchart LR
 - 重复点击启动是幂等操作，只报告已经开启，不重置出一段突动。
 - `status` 服务查询真实状态，而不是网页本地猜测。
 - 可配置逐关节力矩限幅；控制循环异常时记录 fault 并尝试恢复当前位置保持。
-- 启动时 J7 默认进入低阻随动助力，也可单独释放或锁定在当前开口；停止时保持手动调整后的 J7 位置。
-- 重力补偿期间拒绝网页关节、TCP、轨迹和普通夹爪位置命令；夹爪释放/助力/保持服务仍可用。
+- 启动时 J7 默认进入低阻随动助力；停止时自动保持手动调整后的 J7 位置。
+- 重力补偿期间拒绝网页关节、TCP、轨迹和普通夹爪位置命令；夹爪低阻/保持无需手动切换。
 
 服务：
 
@@ -127,10 +127,7 @@ flowchart LR
 /rebotarm/gravity_compensation/start
 /rebotarm/gravity_compensation/stop
 /rebotarm/gravity_compensation/status
-/rebotarm/gripper/release
-/rebotarm/gripper/assist/start
 /rebotarm/gripper/assist/status
-/rebotarm/gripper/hold
 ```
 
 ## 5. 安全回零与失能

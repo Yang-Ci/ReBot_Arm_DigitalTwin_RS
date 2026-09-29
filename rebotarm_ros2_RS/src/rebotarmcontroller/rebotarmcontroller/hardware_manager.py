@@ -160,7 +160,6 @@ class HardwareManager:
         self._gravity_comp_transition_q_hold: np.ndarray | None = None
         self._gravity_comp_transition_started_at: float | None = None
         self._gravity_comp_fault = ""
-        self._gripper_manual_free = False
         self._gripper_assist_active = False
         self._gripper_assist_velocity = 0.0
         self._gripper_hold_position: float | None = None
@@ -699,7 +698,6 @@ class HardwareManager:
                 )
                 self._cached_gripper_position = float(gripper_hold[0])
                 self._gripper_hold_position = float(gripper_hold[0])
-                self._gripper_manual_free = False
                 self._gripper_assist_velocity = 0.0
                 self._gripper_assist_active = True
 
@@ -747,13 +745,12 @@ class HardwareManager:
     @_locked
     def stop_gravity_compensation(self) -> None:
         if not self._gravity_comp_active:
-            # An idempotent stop must not energize a disabled J7.  Only leave
-            # an explicitly requested free/assist mode when the robot is
-            # already enabled.
+            # An idempotent stop must not energize a disabled J7. Only leave
+            # assist mode when the robot is already enabled.
             if (
                 self._enabled
                 and self.has_gripper
-                and (self._gripper_manual_free or self._gripper_assist_active)
+                and self._gripper_assist_active
             ):
                 self._hold_gripper_current_locked()
             return
@@ -1017,7 +1014,7 @@ class HardwareManager:
         return direction * self._gripper_assist_torque * ramp
 
     def _send_gripper_guidance_tick(self) -> None:
-        if not self.has_gripper or self._gripper_manual_free:
+        if not self.has_gripper:
             return
         position = float(self._cached_gripper_position)
         if self._gripper_assist_active:
@@ -1049,21 +1046,6 @@ class HardwareManager:
             kd=self._gripper_mit_kd,
         )
 
-    @_locked
-    def release_gripper_for_manual(self) -> None:
-        """Disable only J7 so the fingers can be positioned by hand."""
-        if not self.has_gripper:
-            return
-        if self._gripper_manual_free and not self._gripper_assist_active:
-            return
-        self.get_gripper_state(request_feedback=True)
-        self._gripper_assist_active = False
-        self._gripper_assist_velocity = 0.0
-        self._gripper_hold_position = None
-        self._gripper_target_position = None
-        self._gripper_group.disable()
-        self._gripper_manual_free = True
-
     def _hold_gripper_current_locked(self) -> None:
         if not self.has_gripper:
             return
@@ -1094,38 +1076,11 @@ class HardwareManager:
         self._gripper_target_position = current
         self._gripper_hold_position = current
         self._mit_gripper_target = None
-        self._gripper_manual_free = False
         self._gripper_assist_active = False
         self._gripper_assist_velocity = 0.0
 
-    @_locked
-    def hold_gripper_current(self) -> None:
-        """Hold the measured J7 pose without returning to a stale target."""
-        self._hold_gripper_current_locked()
-
-    @_locked
-    def start_gripper_assist(self) -> None:
-        """Enable conservative motion-following torque assistance for J7."""
-        if not self.has_gripper:
-            raise RuntimeError("gripper is not initialized")
-        self.get_gripper_state(request_feedback=True)
-        if not self.control_loop_active:
-            self._start_endpos_loop()
-        self._gripper_group.mode_mit(
-            kp=np.zeros(1, dtype=np.float64),
-            kd=np.array([self._gripper_assist_kd], dtype=np.float64),
-        )
-        self._gripper_group.enable()
-        self._gripper_manual_free = False
-        self._gripper_hold_position = None
-        self._gripper_assist_velocity = 0.0
-        self._gripper_assist_active = True
-
     def gripper_assist_active(self) -> bool:
         return bool(self._gripper_assist_active)
-
-    def gripper_manual_free(self) -> bool:
-        return bool(self._gripper_manual_free)
 
     @_locked
     def set_gripper_target(self, position: float) -> None:
@@ -1233,13 +1188,12 @@ class HardwareManager:
             raise RuntimeError("rejecting gripper command while trajectory is running")
         if not self.has_gripper or not self._gripper_name:
             raise RuntimeError("gripper is not initialized")
-        if self._gripper_manual_free or self._gripper_assist_active:
+        if self._gripper_assist_active:
             self._gripper_group.mode_mit(
                 kp=self._gripper_mit_kp,
                 kd=self._gripper_mit_kd,
             )
             self._gripper_group.enable()
-            self._gripper_manual_free = False
             self._gripper_assist_active = False
             self._gripper_assist_velocity = 0.0
             self._gripper_hold_position = None
@@ -1440,9 +1394,7 @@ class HardwareManager:
                     vlim=getattr(self._arm_group, "_pv_vlim"),
                 )
             if self.has_gripper:
-                if self._gripper_manual_free:
-                    pass
-                elif self._gripper_assist_active:
+                if self._gripper_assist_active:
                     self._send_gripper_guidance_tick()
                 else:
                     self._gripper_group.send_mit(
