@@ -148,6 +148,8 @@ class MotorPassthrough:
         allow_preempt: bool,
         allow_during_trajectory: bool = False,
     ) -> bool:
+        if self._hardware.teleop_owned:
+            return False
         state = self._hardware.state_machine
         if state in ("GRAVITY_COMP", "SAFE_HOMING"):
             self._node.get_logger().warn(f"rejecting {label} in state {state}")

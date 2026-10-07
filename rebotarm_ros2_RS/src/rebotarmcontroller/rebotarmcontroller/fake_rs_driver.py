@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import threading
 
 import rclpy
 from rclpy.executors import ExternalShutdownException
@@ -20,6 +21,8 @@ from rebotarm_msgs.msg import (
 from rebotarm_msgs.srv import GripperCommand, SetGripper
 from sensor_msgs.msg import JointState
 from std_srvs.srv import Trigger
+from .fake_leader_hardware import FakeLeaderHardware
+from .leader_teleop import LeaderTeleop
 
 
 _JOINT_LIMITS = (
@@ -69,6 +72,29 @@ class FakeRsDriver(Node):
         self.gripper_velocity = 0.0
         self.state_machine = "IDLE"
         self.last_time = self.get_clock().now()
+        self._leader_lock = threading.RLock()
+        self.leader_hardware = FakeLeaderHardware(self)
+
+        # All legacy mutation callbacks share the lease lock with the UART reader.
+        def guard(handler, service=False):
+            def callback(*args):
+                with self._leader_lock:
+                    if self.leader_hardware.teleop_owned:
+                        if service:
+                            response = args[1]
+                            response.success = False
+                            if hasattr(response, "message"):
+                                response.message = "stop leader teleoperation first"
+                            return response
+                        return None
+                    return handler(*args)
+            return callback
+
+        for method in ("_enable", "_disable", "_safe_home", "_start_gravity_compensation",
+                       "_stop_gravity_compensation", "_set_gripper", "_open_gripper", "_close_gripper"):
+            setattr(self, method, guard(getattr(self, method), service=True))
+        self._set_joint_target = guard(self._set_joint_target)
+        self._set_gripper_target = guard(self._set_gripper_target)
 
         self.joint_state_pub = self.create_publisher(
             JointState,
@@ -175,6 +201,7 @@ class FakeRsDriver(Node):
         self.timer = self.create_timer(1.0 / rate, self._tick)
         self.status_timer = self.create_timer(0.5, self.publish_status)
         self.publish_status()
+        self.leader_teleop = LeaderTeleop(self, self.leader_hardware, self.namespace, allow_mock=True)
         self.get_logger().info(
             f"RS fake driver ready: namespace=/{self.namespace}, "
             "interface=JointPosVelCmd/JointMitCmd"
@@ -311,6 +338,11 @@ class FakeRsDriver(Node):
         return response
 
     def _tick(self) -> None:
+        with self._leader_lock:
+            self.leader_hardware.teleop_watchdog()
+            self._tick_locked()
+
+    def _tick_locked(self) -> None:
         now = self.get_clock().now()
         dt = max((now - self.last_time).nanoseconds / 1e9, 0.001)
         self.last_time = now
@@ -410,6 +442,7 @@ def main(args=None) -> None:
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
+        node.leader_teleop.shutdown()
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

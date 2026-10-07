@@ -1,0 +1,2 @@
+# Preserve the manufacturer's exact source bytes and its recorded SHA-256.
+urdf/upstream-model.urdf -text -diff

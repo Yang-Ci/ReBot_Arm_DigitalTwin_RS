@@ -9,6 +9,16 @@ import numpy as np
 from .conversions import fk_to_pose
 from .hardware_config import resolve_hardware_config
 from .motion_profiles import advance_jerk_limited_reference_over_elapsed
+from .leader_policy import TeleopLease, finite_vector
+
+_TELEOP_BLOCKED_METHODS = {
+    "hold_current_position", "set_joint_position_target", "update_trajectory_reference",
+    "start_endpos_control", "disable", "set_zero", "send_joint_mit_cmd",
+    "send_joint_pos_vel_cmd", "begin_trajectory_stream", "move_to_pose_ik",
+    "start_gravity_compensation", "stop_gravity_compensation", "release_gripper_for_manual",
+    "hold_gripper_current", "start_gripper_assist", "set_gripper_target",
+    "send_gripper_mit_cmd", "send_gripper_pos_vel_cmd", "stop_motion",
+}
 
 _GRIPPER_GOAL_TOLERANCE_RAD = 0.12
 _DEFAULT_JOINT_POS_VEL_VLIM_RAD_S = 1.20
@@ -25,6 +35,9 @@ def _locked(method):
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         with self._cmd_lock:
+            lease = getattr(self, "_teleop_lease", None)
+            if lease and lease.session_id and method.__name__ in _TELEOP_BLOCKED_METHODS:
+                raise RuntimeError("leader owns control; stop leader teleoperation first")
             return method(self, *args, **kwargs)
 
     return wrapper
@@ -40,6 +53,8 @@ class HardwareManager:
         channel: str = "",
     ) -> None:
         self._cmd_lock = threading.RLock()
+        self._teleop_lease = TeleopLease()
+        self._feedback_refreshed_at = 0.0
         hardware_config_path, hardware_data = resolve_hardware_config(
             hardware_config,
             model,
@@ -112,6 +127,14 @@ class HardwareManager:
 
         self._gc_model = load_robot_model()
         self._gc_data = self._gc_model.createData()
+        self.teleop_limits = []
+        for name in self.joint_names:
+            joint_id = self._gc_model.getJointId(name)
+            if not 0 < joint_id < self._gc_model.njoints:
+                raise ValueError(f"missing URDF joint for leader mapping: {name}")
+            q_index = self._gc_model.joints[joint_id].idx_q
+            self.teleop_limits.append((float(self._gc_model.lowerPositionLimit[q_index]),
+                                       float(self._gc_model.upperPositionLimit[q_index])))
         self._gc_compute_generalized_gravity = compute_generalized_gravity
         gc_runtime = runtime_config["gravity_compensation"]
         self._gravity_comp_kp = np.array(gc_runtime["kp"], dtype=np.float64)
@@ -319,6 +342,7 @@ class HardwareManager:
         self._cached_arm_position = np.array(pos[:n], dtype=np.float64, copy=True)
         self._cached_arm_velocity = np.array(vel[:n], dtype=np.float64, copy=True)
         self._cached_arm_torque = np.array(torq[:n], dtype=np.float64, copy=True)
+        self._feedback_refreshed_at = time.monotonic()
         if self.has_gripper and len(pos) > n:
             self._cached_gripper_position = float(pos[n])
             self._cached_gripper_velocity = float(vel[n])
@@ -461,6 +485,8 @@ class HardwareManager:
 
     def safe_home(self) -> None:
         with self._cmd_lock:
+            if self.teleop_owned:
+                raise RuntimeError("stop leader teleoperation before safe home")
             self.stop_motion()
             # A previous browser stream may still contain arm targets. Clear
             # them before homing, but preserve the measured J7 pose: closing a
@@ -1380,6 +1406,7 @@ class HardwareManager:
         if not self._cmd_lock.acquire(blocking=False):
             return
         try:
+            self._teleop_watchdog_locked()
             if not self._control_output_enabled:
                 return
             now = time.perf_counter()
@@ -1452,6 +1479,120 @@ class HardwareManager:
                     )
         finally:
             self._cmd_lock.release()
+
+    @property
+    def teleop_owned(self) -> bool:
+        lease = getattr(self, "_teleop_lease", None)
+        return bool(lease and lease.session_id)
+
+    @_locked
+    def teleop_acquire(self):
+        if self.teleop_owned:
+            raise RuntimeError("leader control is already owned")
+        if not self.enabled or self._arm_control_mode != "mit":
+            raise RuntimeError("leader needs an enabled MIT follower")
+        if self.state_machine != "IDLE" or self.motion_active():
+            raise RuntimeError(f"follower is busy: {self.state_machine}; stop other motion first")
+        if self.has_gripper and (self._gripper_manual_free or self._gripper_assist_active):
+            raise RuntimeError("return gripper to position hold before starting leader")
+        if time.monotonic() - self._feedback_refreshed_at > 0.5:
+            raise RuntimeError("follower feedback is stale")
+        self._hold_teleop_locked()
+        self._begin_lowlevel_streaming("mit")
+        if self.has_gripper:
+            self._begin_gripper_lowlevel("mit")
+        session = self._teleop_lease.acquire()
+        self._mit_stream_target = self._cached_arm_position.copy()
+        self._mit_stream_velocity.fill(0)
+        self._mit_stream_acceleration.fill(0)
+        return session
+
+    @_locked
+    def teleop_heartbeat(self, session):
+        if self._teleop_watchdog_locked():
+            raise RuntimeError("leader session timed out")
+        self._teleop_lease.heartbeat(session)
+
+    @_locked
+    def teleop_pause(self, session):
+        if self._teleop_watchdog_locked():
+            raise RuntimeError("leader session timed out")
+        self._teleop_lease.require(session)
+        self._hold_teleop_locked()
+        self._teleop_lease.paused = True
+
+    @_locked
+    def teleop_resume(self, session):
+        if self._teleop_watchdog_locked():
+            raise RuntimeError("leader session timed out")
+        self._teleop_lease.require(session)
+        if time.monotonic() - self._feedback_refreshed_at > 0.5:
+            raise RuntimeError("follower feedback is stale")
+        self._teleop_lease.paused = False
+        self._teleop_lease.last_sample = time.monotonic()
+        self._teleop_lease.last_seq = -1
+        self.set_state_machine("LOWLEVEL_STREAMING")
+
+    @_locked
+    def teleop_stop(self, session, reason="stopped"):
+        self._teleop_lease.require(session)
+        self._hold_teleop_locked()
+        self._teleop_lease.release(reason)
+
+    @_locked
+    def teleop_send(self, session, seq, sampled_at, targets, gripper, speed):
+        self._teleop_watchdog_locked()
+        self._teleop_lease.require(session)
+        target = finite_vector(targets, 6)
+        for value, (lo, hi) in zip(target, self.teleop_limits):
+            if not lo <= value <= hi:
+                raise ValueError("leader target outside follower URDF limits")
+        if not np.isfinite(speed) or not 0.05 <= speed <= 0.6:
+            raise ValueError("leader speed must be 0.05..0.6 rad/s")
+        if time.monotonic() - self._feedback_refreshed_at > 0.5:
+            self._hold_teleop_locked()
+            self._teleop_lease.release("follower feedback timed out")
+            raise RuntimeError("follower feedback timed out")
+        if gripper is not None:
+            if not self.has_gripper or not np.isfinite(gripper) or not (
+                self.gripper_close_position <= gripper <= self.gripper_open_position
+            ):
+                raise ValueError("invalid leader gripper target")
+        self._teleop_lease.sample(session, seq, sampled_at)
+        self._mit_stream_target = np.array(target)
+        self._mit_stream_vlim.fill(speed)
+        if gripper is not None:
+            self._mit_gripper_target = float(gripper)
+            self._mit_gripper_vlim = min(speed * 6, 1.5)
+        self.set_state_machine("LOWLEVEL_STREAMING")
+
+    def _hold_teleop_locked(self):
+        # No blocking CAN query in the periodic sender/watchdog. Discard every
+        # old streaming target so neither J1-J6 nor J7 can resume it later.
+        self._mit_stream_target = None
+        self._lowlevel_pos_target = None
+        self._mit_stream_velocity.fill(0)
+        self._mit_stream_acceleration.fill(0)
+        self._endpos_ctrl._q_target[:] = self._cached_arm_position
+        self._endpos_ctrl._qd_target[:] = 0
+        self._mit_gripper_target = None
+        self._gripper_target_position = None
+        if self.has_gripper:
+            self._endpos_ctrl._gripper_target = self._cached_gripper_position
+        self.set_state_machine("IDLE")
+
+    def _teleop_watchdog_locked(self):
+        if not self.teleop_owned:
+            return ""
+        reason = self._teleop_lease.expired()
+        if reason:
+            self._hold_teleop_locked()
+            self._teleop_lease.release(reason)
+        return reason
+
+    @_locked
+    def teleop_watchdog(self):
+        return self._teleop_watchdog_locked()
 
     def _send_endpos_hold_once(self) -> None:
         if self._arm_control_mode == "mit":

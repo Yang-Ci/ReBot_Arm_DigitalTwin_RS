@@ -60,6 +60,9 @@ class ArmActions:
         return self._gate_goal(("GRAVITY_COMP", "SAFE_HOMING"), "gripper")
 
     def _gate_goal(self, blocked, label):
+        if self._hardware.teleop_owned:
+            self._node.get_logger().warn(f"rejecting {label}: leader owns control")
+            return GoalResponse.REJECT
         state = self._hardware.state_machine
         if state in blocked:
             self._node.get_logger().warn(f"rejecting {label} goal in state {state}")
@@ -70,9 +73,7 @@ class ArmActions:
         return CancelResponse.ACCEPT
 
     def _fail_move_to_pose(self, goal_handle, result, message, *, canceled=False):
-        if self._hardware.state_machine != "SAFE_HOMING":
-            self._hardware.set_state_machine("IDLE")
-            self._node.publish_arm_status()
+        self._release_action_state()
         if canceled:
             goal_handle.canceled()
         else:
@@ -81,6 +82,19 @@ class ArmActions:
         result.message = message
         result.final_pose = self._hardware.current_pose()
         return result
+
+    def _hold_after_failure(self):
+        with self._hardware._cmd_lock:
+            if not self._hardware.teleop_owned:
+                self._hardware.hold_current_position()
+
+    def _release_action_state(self):
+        # A goal accepted before leader acquisition can fail during execution.
+        # Its cleanup must not overwrite the newly acquired leader state.
+        with self._hardware._cmd_lock:
+            if not self._hardware.teleop_owned and self._hardware.state_machine != "SAFE_HOMING":
+                self._hardware.set_state_machine("IDLE")
+                self._node.publish_arm_status()
 
     def execute_move_to_pose(self, goal_handle):
         goal = goal_handle.request
@@ -92,7 +106,7 @@ class ArmActions:
                 x, y, z, roll, pitch, yaw, float(goal.duration)
             )
         except Exception as exc:
-            self._hardware.hold_current_position()
+            self._hold_after_failure()
             return self._fail_move_to_pose(goal_handle, result, str(exc))
 
         if not ok:
@@ -291,15 +305,13 @@ class ArmActions:
                 time.sleep(0.02)
 
         except Exception as exc:
-            self._hardware.hold_current_position()
+            self._hold_after_failure()
             goal_handle.abort()
             result.error_code = FollowJointTrajectory.Result.PATH_TOLERANCE_VIOLATED
             result.error_string = f"execution failed: {exc}"
             return result
         finally:
-            if self._hardware.state_machine != "SAFE_HOMING":
-                self._hardware.set_state_machine("IDLE")
-                self._node.publish_arm_status()
+            self._release_action_state()
 
         goal_handle.succeed()
         result.error_code = FollowJointTrajectory.Result.SUCCESSFUL

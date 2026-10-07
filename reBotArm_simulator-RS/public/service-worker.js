@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rebot-arm-rs-pwa-v93-preset-smooth';
+const CACHE_NAME = 'rebot-arm-rs-pwa-v105-leader-model';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -10,7 +10,20 @@ const APP_SHELL = [
   '/js/rebot-sim.js?v=20260921-rs-preset-smooth02',
   '/js/ros/rebot-ros-client.js?v=20260921-rs-preset-smooth02',
   '/js/control-mode.js?v=20260812-rs-ctrl32',
-  '/js/ros/rebot-ros-ui.js?v=20260921-rs-preset-smooth02',
+  '/js/ros/rebot-ros-ui.js?v=20261007-leader01',
+  '/js/ros/leader-model.js?v=20261007-leader02',
+  '/js/ros/rebot-leader-ui.js?v=20261007-leader02',
+  '/css/leader-teleop.css?v=20261007-leader02',
+  '/models/leader-arm102/urdf/leader.urdf',
+  '/models/leader-arm102/meshes/base_link.STL',
+  '/models/leader-arm102/meshes/link1.STL',
+  '/models/leader-arm102/meshes/link2.STL',
+  '/models/leader-arm102/meshes/link3.STL',
+  '/models/leader-arm102/meshes/link4.STL',
+  '/models/leader-arm102/meshes/link5.STL',
+  '/models/leader-arm102/meshes/link6.STL',
+  '/models/leader-arm102/meshes/link7_left.STL',
+  '/models/leader-arm102/meshes/link7_right.STL',
   '/js/rebot-llm.js?v=20260813-rs-guide43',
   '/lib/three-r128.min.js',
   '/lib/STLLoader-umd.js',

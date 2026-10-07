@@ -228,6 +228,12 @@
   let gripperManualFree = false;
   let activeTeachingGripperReplay = null;
   let activePresetTransition = null;
+  window.addEventListener('rebot-leader-starting', () => {
+    cancelPendingWebMotionCommands();
+    cancelLowLevelPlayback();
+    if (activeTeachingGripperReplay) activeTeachingGripperReplay.cancelled = true;
+    if (activePresetTransition) activePresetTransition.cancelled = true;
+  });
   // Multi-joint hardware motions use one shared requestAnimationFrame
   // renderer.  Keeping all links on the same feedback timeline prevents a
   // preset/replay from looking like seven independent, stepped animations.
@@ -2151,6 +2157,10 @@
   }
 
  function controlAllowed(interactive) {
+   if (window.reBotLeaderActive) {
+     if (interactive) setMessage('主臂正在占用控制，请先停止 Leader 遥操作');
+     return false;
+   }
    if (!client.connected) {
      if (interactive) setStatus('closed', t('msg.rosNotConnected'));
      return false;

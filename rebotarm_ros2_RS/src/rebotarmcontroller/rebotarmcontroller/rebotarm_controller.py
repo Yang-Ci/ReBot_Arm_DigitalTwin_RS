@@ -11,6 +11,7 @@ from .motor_passthrough import MotorPassthrough
 from .ros_actions import ArmActions
 from .ros_publishers import JointStatePublisher
 from .ros_services import ArmServices
+from .leader_teleop import LeaderTeleop
 
 
 class reBotArmController(Node):
@@ -72,6 +73,7 @@ class reBotArmController(Node):
             self.arm_namespace,
             cmd_arbitration,
         )
+        self.leader_teleop = LeaderTeleop(self, self.hardware, self.arm_namespace)
 
         self.get_logger().info(
             f"reBotArmController started: namespace=/{self.arm_namespace}, "
@@ -82,6 +84,7 @@ class reBotArmController(Node):
         self.joint_state_publisher.publish_status(read_hardware=read_hardware)
 
     def shutdown(self) -> None:
+        self.leader_teleop.shutdown()
         self.hardware.shutdown(
             disable_after_safe_home=self.disable_after_safe_home,
         )

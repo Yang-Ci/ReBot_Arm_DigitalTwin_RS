@@ -1,0 +1,13 @@
+# scan/connect/unlock/calibrate/disconnect/start/pause/resume/stop/heartbeat
+string operation
+string port
+string session_id
+float64 speed
+bool follow_gripper
+bool absolute
+bool confirm_zero
+---
+bool success
+string message
+string session_id
+rebotarm_msgs/LeaderDevice[] devices

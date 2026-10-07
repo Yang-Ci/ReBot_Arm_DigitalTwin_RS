@@ -1,0 +1,84 @@
+{
+  "model": "Star Arm 102-LD Leader",
+  "retrieved": "2026-10-07",
+  "website": "https://fashionstar.com.hk/robot-arm/star-arm-102/",
+  "repository": "https://github.com/servodevelop/Star-Arm-102",
+  "repository_commit": "5d066333c65ac2c8aadcf0a36ee297e9521139be",
+  "assets": [
+    {
+      "file": "meshes/base_link.STL",
+      "url": "https://fashionstar.com.hk/wiki/zh/software/robot-arm/data/102-web-controller/Browser_SDK/assets/models/ld/base_link.STL",
+      "bytes": 392584,
+      "sha256": "ecebb8bb5f7277558c1438f5d9079076773fa3bdffd2082b70c4d27ffebf8846"
+    },
+    {
+      "file": "meshes/link1.STL",
+      "url": "https://fashionstar.com.hk/wiki/zh/software/robot-arm/data/102-web-controller/Browser_SDK/assets/models/ld/link1.STL",
+      "bytes": 717484,
+      "sha256": "e3a17a84782a49483710ca95355aede417f92f54b008640bc95cbb4f216ff6f1"
+    },
+    {
+      "file": "meshes/link2.STL",
+      "url": "https://fashionstar.com.hk/wiki/zh/software/robot-arm/data/102-web-controller/Browser_SDK/assets/models/ld/link2.STL",
+      "bytes": 750084,
+      "sha256": "7c696afbc51a0e35d9f84701986d09f11087c2e711b75f0750016a7013f6d810"
+    },
+    {
+      "file": "meshes/link3.STL",
+      "url": "https://fashionstar.com.hk/wiki/zh/software/robot-arm/data/102-web-controller/Browser_SDK/assets/models/ld/link3.STL",
+      "bytes": 984084,
+      "sha256": "1929795251e54eac510d11914bac94717ff8d75ecdf0b5525e4827cadcfd1e21"
+    },
+    {
+      "file": "meshes/link4.STL",
+      "url": "https://fashionstar.com.hk/wiki/zh/software/robot-arm/data/102-web-controller/Browser_SDK/assets/models/ld/link4.STL",
+      "bytes": 197284,
+      "sha256": "314a0499f6290ecc7a26e6725c779b03ecbde98d20fd0ce5ba5a5896c7f0a124"
+    },
+    {
+      "file": "meshes/link5.STL",
+      "url": "https://fashionstar.com.hk/wiki/zh/software/robot-arm/data/102-web-controller/Browser_SDK/assets/models/ld/link5.STL",
+      "bytes": 980584,
+      "sha256": "89c8d6d4facb21a00e8c9568e9f579fdfb9e5aac1954354d4cd6d4c0bb760eaf"
+    },
+    {
+      "file": "meshes/link6.STL",
+      "url": "https://fashionstar.com.hk/wiki/zh/software/robot-arm/data/102-web-controller/Browser_SDK/assets/models/ld/link6.STL",
+      "bytes": 751184,
+      "sha256": "7aa96b31802154e931f0182dc7500eda7dd4c326e7dcea93f0f27987336156ef"
+    },
+    {
+      "file": "meshes/link7_left.STL",
+      "url": "https://fashionstar.com.hk/wiki/zh/software/robot-arm/data/102-web-controller/Browser_SDK/assets/models/ld/link7_left.STL",
+      "bytes": 199384,
+      "sha256": "e264dd2a1972ba91828c0e11e940c5cff06d1a3ca386446937a1b0b63ec5eef1"
+    },
+    {
+      "file": "meshes/link7_right.STL",
+      "url": "https://fashionstar.com.hk/wiki/zh/software/robot-arm/data/102-web-controller/Browser_SDK/assets/models/ld/link7_right.STL",
+      "bytes": 168084,
+      "sha256": "99b7c0c7993fada7a710ec4c7329c6153ce477b9f68d41fc06501fc48ee4deab"
+    },
+    {
+      "file": "urdf/upstream-model.urdf",
+      "url": "https://fashionstar.com.hk/wiki/zh/software/robot-arm/data/102-web-controller/Browser_SDK/assets/urdf/ld/model.urdf",
+      "bytes": 11295,
+      "sha256": "075fd66a7a49b4dcbca5bb8ad246f9fbc345fea72b2ad5f36ed03ce6f2bce42b"
+    }
+  ],
+  "display_directions": [
+    1,
+    1,
+    1,
+    -1,
+    1,
+    1
+  ],
+  "handle_scale": 1,
+  "changes": [
+    "relative mesh paths",
+    "joint5 movable as official LD web configuration",
+    "joint7_right mimic = -joint7_left"
+  ],
+  "mapping_reference": "https://fashionstar.com.hk/wiki/zh/software/robot-arm/data/102-web-controller/Browser_SDK/src/joint_mapper.js"
+}

@@ -13,6 +13,7 @@
   <link rel="apple-touch-icon" href="./favicon.png">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="stylesheet" href="./css/rebot-sim.css?v=20260813-rs-guide43">
+  <link rel="stylesheet" href="./css/leader-teleop.css?v=20261007-leader02">
 </head>
 <body>
   <main class="app-shell">
@@ -236,6 +237,38 @@
           <strong id="ros-feedback-error" data-i18n="ros.feedbackWaiting">等待 /joint_states</strong>
         </div>
         <p class="ros-message" id="ros-message" data-i18n="ros.message">先在 Ubuntu 虚拟机启动 rosbridge，再输入地址连接。</p>
+      </div>
+
+      <div class="section" id="leader-panel">
+        <div class="section-head"><h3 data-leader-text="title">Leader 遥操作</h3><span class="mini-pill" id="leader-status">等待 ROS 主臂服务</span></div>
+        <p class="leader-tip" data-leader-text="tip">扫描 ROS 主机的串口。连接预览后解锁主臂、摆好零位，再确认校准；默认相对跟随。</p>
+        <div id="leader-model" class="leader-model" hidden>
+          <div class="leader-model-head"><strong class="leader-model-title">Arm102 Leader · 实测姿态</strong><button type="button" class="leader-model-reset">重置视角</button></div>
+          <div class="leader-model-host"></div>
+          <p class="leader-model-note" role="status">正在加载官方 LD 模型…</p>
+        </div>
+        <label class="field-row"><span data-leader-text="port">主臂串口（ROS 主机）</span><input id="leader-port" type="text" placeholder="/dev/ttyUSB0" spellcheck="false"></label>
+        <label class="field-row"><span data-leader-text="device">扫描结果</span><select id="leader-devices" aria-label="Leader devices"></select></label>
+        <div class="button-grid">
+          <button type="button" id="leader-scan" data-leader-text="scan">扫描主臂</button>
+          <button type="button" id="leader-connect" data-leader-text="connect">连接</button>
+          <button type="button" id="leader-unlock" data-leader-text="unlock">解锁主臂</button>
+          <button type="button" id="leader-disconnect" data-leader-text="disconnect">断开主臂</button>
+        </div>
+        <label class="switch-row"><input type="checkbox" id="leader-zero"><span data-leader-text="zero">已摆好主臂零位并闭合夹爪</span></label>
+        <div class="button-grid"><button type="button" id="leader-calibrate" data-leader-text="calibrate">确认并设置主臂零位</button></div>
+        <label class="field-row"><span data-leader-text="speed">目标速度（rad/s）</span><input id="leader-speed" type="number" min="0.05" max="0.6" step="0.05" value="0.3"></label>
+        <label class="switch-row"><input type="checkbox" id="leader-gripper" checked><span data-leader-text="gripper">跟随夹爪</span></label>
+        <label class="switch-row"><input type="checkbox" id="leader-absolute"><span data-leader-text="absolute">绝对跟随（需主从对齐）</span></label>
+        <div class="button-grid">
+          <button type="button" id="leader-start" data-leader-text="start">开始跟随</button>
+          <button type="button" id="leader-pause" data-leader-text="pause">暂停保持</button>
+          <button type="button" id="leader-resume" data-leader-text="resume">继续跟随</button>
+          <button type="button" id="leader-stop" data-leader-text="stop">停止并释放控制</button>
+        </div>
+        <div class="leader-readout" id="leader-angles">J1–J6 / G: —</div>
+        <div class="ros-feedback"><span>Leader</span><strong id="leader-rate">—</strong></div>
+        <p class="ros-message" id="leader-message" role="status" aria-live="polite">等待 ROS 主臂服务</p>
       </div>
 
       <div class="section log-section">
@@ -514,7 +547,9 @@ export REBOTARM_LLM_MODEL='qwen-plus'
   <script src="./js/ros/rebot-ros-client.js?v=20260921-rs-preset-smooth02"></script>
   <script src="./js/rebot-sim.js?v=20260921-rs-preset-smooth02"></script>
   <script src="./js/control-mode.js?v=20260812-rs-ctrl32"></script>
-  <script src="./js/ros/rebot-ros-ui.js?v=20260921-rs-preset-smooth02"></script>
+  <script src="./js/ros/rebot-ros-ui.js?v=20261007-leader01"></script>
+  <script src="./js/ros/leader-model.js?v=20261007-leader02"></script>
+  <script src="./js/ros/rebot-leader-ui.js?v=20261007-leader02"></script>
   <script src="./js/motorbridge/rebot-motorbridge-client.js?v=20260812-rs-ctrl32"></script>
   <script src="./js/motorbridge/rebot-motorbridge-ui.js?v=20260812-rs-ctrl32"></script>
   <script src="./js/rebot-llm.js?v=20260904-rs-pages01"></script>
