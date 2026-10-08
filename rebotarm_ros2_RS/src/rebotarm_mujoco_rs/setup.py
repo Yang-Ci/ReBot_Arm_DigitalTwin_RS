@@ -11,7 +11,8 @@ setup(
         ("share/ament_index/resource_index/packages", [f"resource/{package_name}"]),
         (f"share/{package_name}", ["package.xml", "README.md"]),
         (f"share/{package_name}/launch", glob("launch/*.launch.py")),
-        (f"share/{package_name}/models", glob("models/*.xml")),
+        (f"share/{package_name}/models", glob("models/*.xml") + glob("models/*.json") + glob("models/*.md")),
+        (f"share/{package_name}/models/licenses", glob("models/licenses/*")),
         (f"share/{package_name}/models/meshes", glob("models/meshes/*")),
     ],
     install_requires=["setuptools"],
@@ -27,6 +28,7 @@ setup(
             "rs_scene_detector = rebotarm_mujoco_rs.scene_detector:main",
             "rs_task_server = rebotarm_mujoco_rs.task_server:main",
             "joint_slider_gui = rebotarm_mujoco_rs.joint_slider_gui:main",
+            "wrist_camera_selector = rebotarm_mujoco_rs.wrist_camera_selector:main",
         ],
     },
 )

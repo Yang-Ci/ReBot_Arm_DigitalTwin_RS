@@ -95,7 +95,7 @@ async function main() {
     mujoco,
     model,
     mujoco.mjtObj.mjOBJ_GEOM.value,
-    'd405_wrist_mount'
+    'wrist_d405_camera_mount_link_0_0'
   );
   const mountExtent = meshExtent(model, model.geom_dataid[mountGeomId]);
   const gripperBodyId = namedId(
@@ -582,9 +582,8 @@ async function main() {
     wristCameraPosition,
     wristCameraTravel,
     d405MountExtent: mountExtent,
-    d405MountPosition: geomPosition(mujoco, model, data, 'd405_wrist_mount'),
-    d405BodyPosition: geomPosition(mujoco, model, data, 'd405_camera_body'),
-    d405FrontPosition: geomPosition(mujoco, model, data, 'd405_camera_front'),
+    d405MountPosition: geomPosition(mujoco, model, data, 'wrist_d405_camera_mount_link_0_0'),
+    d405BodyPosition: geomPosition(mujoco, model, data, 'wrist_d405_camera_link_0_0'),
     tcpHome: tcp0,
     tcpMatrix,
     ncon: data.ncon,

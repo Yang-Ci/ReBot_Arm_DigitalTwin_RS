@@ -31,9 +31,6 @@
     <mesh name="cnc_left" file="cnc_left.STL" />
     <mesh name="pla_right" file="pla_right.STL" />
     <mesh name="cnc_right" file="cnc_right.STL" />
-    <!-- B601-RS / RealSense D405 30-degree wrist mount by Bowen Zhu.
-         Source and license details: THIRD_PARTY_MODELS.md. -->
-    <mesh name="d405_wrist_mount" file="rebot_b601_rs_d405_mount_30deg.stl" scale="0.001 0.001 0.001" />
     <!-- DM 已验证的夹爪凸碰撞分片。DM 与 RS 对同一物理手指的 left/right
          命名相反，因此 RS left 使用 DM right 网格，RS right 使用 DM left 网格。
          网格坐标位于 gripper_end 坐标系，再由 geom 逆变换进入手指局部坐标系。 -->
@@ -54,12 +51,71 @@
     <material name="rs_wordmark_black_mat" rgba="0.010 0.012 0.011 1" specular="0.04" shininess="0.04" metallic="0.00" roughness="0.76" />
     <material name="rs_anodized_silver_mat" rgba="0.720 0.760 0.730 1" specular="0.72" shininess="0.90" metallic="0.88" roughness="0.18" />
     <material name="rs_seeed_green_mat" rgba="0.725 0.835 0.118 1" specular="0.22" shininess="0.26" metallic="0.18" roughness="0.34" />
-    <!-- The mount uses the upstream simulation's diagnostic orange so the
-         printed part remains distinguishable from the black wrist motor. -->
-    <material name="d405_mount_mat" rgba="1.000 0.320 0.020 1" specular="0.20" shininess="0.22" metallic="0.04" roughness="0.64" />
-    <material name="d405_housing_mat" rgba="0.160 0.205 0.225 1" specular="0.42" shininess="0.48" metallic="0.22" roughness="0.38" />
-    <material name="d405_front_mat" rgba="0.025 0.038 0.046 1" specular="0.32" shininess="0.44" metallic="0.12" roughness="0.34" />
-    <material name="d405_lens_mat" rgba="0.020 0.420 0.700 1" specular="0.90" shininess="0.96" metallic="0.10" roughness="0.08" />
+    <!-- BEGIN GENERATED WRIST CAMERA ASSETS -->
+    <mesh name="wrist_mounts_D405_305_Mount" file="wrist_mounts_D405_305_Mount.stl" scale="0.001 0.001 0.001" />
+    <material name="wrist_d405_camera_mount_link_0_0_mat" rgba="0.7 0.73 0.75 1" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_realsense_d405" file="wrist_realsense_d405.stl" scale="0.001 0.001 0.001" />
+    <material name="wrist_d405_camera_link_0_0_mat" rgba="0.7 0.73 0.75 1" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_mounts_D435_Gemini2_Mount" file="wrist_mounts_D435_Gemini2_Mount.stl" scale="0.001 0.001 0.001" />
+    <material name="wrist_d435i_camera_mount_link_0_0_mat" rgba="0.7 0.73 0.75 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_d435i_body_00" file="wrist_d435i_body_00.stl" scale="1 1 1" />
+    <material name="wrist_d435i_camera_link_0_0_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_d435i_body_01" file="wrist_d435i_body_01.stl" scale="1 1 1" />
+    <material name="wrist_d435i_camera_link_0_1_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_d435i_body_02" file="wrist_d435i_body_02.stl" scale="1 1 1" />
+    <material name="wrist_d435i_camera_link_0_2_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_d435i_body_03" file="wrist_d435i_body_03.stl" scale="1 1 1" />
+    <material name="wrist_d435i_camera_link_0_3_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_d435i_body_04" file="wrist_d435i_body_04.stl" scale="1 1 1" />
+    <material name="wrist_d435i_camera_link_0_4_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_d435i_body_05" file="wrist_d435i_body_05.stl" scale="1 1 1" />
+    <material name="wrist_d435i_camera_link_0_5_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_d435i_body_06" file="wrist_d435i_body_06.stl" scale="1 1 1" />
+    <material name="wrist_d435i_camera_link_0_6_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_d435i_body_07" file="wrist_d435i_body_07.stl" scale="1 1 1" />
+    <material name="wrist_d435i_camera_link_0_7_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_d435i_body_08" file="wrist_d435i_body_08.stl" scale="1 1 1" />
+    <material name="wrist_d435i_camera_link_0_8_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_d435i_body_09" file="wrist_d435i_body_09.stl" scale="1 1 1" />
+    <material name="wrist_d435i_camera_link_0_9_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_d435i_body_10" file="wrist_d435i_body_10.stl" scale="1 1 1" />
+    <material name="wrist_d435i_camera_link_0_10_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_d435i_body_11" file="wrist_d435i_body_11.stl" scale="1 1 1" />
+    <material name="wrist_d435i_camera_link_0_11_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_d435i_body_12" file="wrist_d435i_body_12.stl" scale="1 1 1" />
+    <material name="wrist_d435i_camera_link_0_12_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_d435i_body_13" file="wrist_d435i_body_13.stl" scale="1 1 1" />
+    <material name="wrist_d435i_camera_link_0_13_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_d435i_body_14" file="wrist_d435i_body_14.stl" scale="1 1 1" />
+    <material name="wrist_d435i_camera_link_0_14_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_d435i_body_15" file="wrist_d435i_body_15.stl" scale="1 1 1" />
+    <material name="wrist_d435i_camera_link_0_15_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_d435i_body_16" file="wrist_d435i_body_16.stl" scale="1 1 1" />
+    <material name="wrist_d435i_camera_link_0_16_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_d435i_body_17" file="wrist_d435i_body_17.stl" scale="1 1 1" />
+    <material name="wrist_d435i_camera_link_0_17_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_d435i_body_18" file="wrist_d435i_body_18.stl" scale="1 1 1" />
+    <material name="wrist_d435i_camera_link_0_18_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_gemini2_base_link" file="wrist_gemini2_base_link.stl" scale="1 1 1" />
+    <material name="wrist_gemini2_camera_link_0_0_mat" rgba="0.792156862745 0.819607843137 0.933333333333 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_gemini2_camera_botter_screw_frame" file="wrist_gemini2_camera_botter_screw_frame.stl" scale="1 1 1" />
+    <material name="wrist_gemini2_camera_botter_screw_frame_0_0_mat" rgba="0.792156862745 0.819607843137 0.933333333333 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_gemini2_camera_infra1_frame" file="wrist_gemini2_camera_infra1_frame.stl" scale="1 1 1" />
+    <material name="wrist_gemini2_camera_right_ir_frame_0_0_mat" rgba="0.792156862745 0.819607843137 0.933333333333 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_gemini2_camera_infra1_optical_frame" file="wrist_gemini2_camera_infra1_optical_frame.stl" scale="1 1 1" />
+    <material name="wrist_gemini2_camera_right_ir_optical_frame_0_0_mat" rgba="0.792156862745 0.819607843137 0.933333333333 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_gemini2_camera_color_frame" file="wrist_gemini2_camera_color_frame.stl" scale="1 1 1" />
+    <material name="wrist_gemini2_camera_color_frame_0_0_mat" rgba="0.792156862745 0.819607843137 0.933333333333 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_gemini2_camera_color_optical_frame" file="wrist_gemini2_camera_color_optical_frame.stl" scale="1 1 1" />
+    <material name="wrist_gemini2_camera_color_optical_frame_0_0_mat" rgba="0.792156862745 0.819607843137 0.933333333333 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_gemini2_camera_infra2_frame" file="wrist_gemini2_camera_infra2_frame.stl" scale="1 1 1" />
+    <material name="wrist_gemini2_camera_left_ir_frame_0_0_mat" rgba="0.792156862745 0.819607843137 0.933333333333 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_gemini2_camera_infra2_optical_frame" file="wrist_gemini2_camera_infra2_optical_frame.stl" scale="1 1 1" />
+    <material name="wrist_gemini2_camera_left_ir_optical_frame_0_0_mat" rgba="0.792156862745 0.819607843137 0.933333333333 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_gemini2_camera_depth_frame" file="wrist_gemini2_camera_depth_frame.stl" scale="1 1 1" />
+    <material name="wrist_gemini2_camera_depth_frame_0_0_mat" rgba="0.792156862745 0.819607843137 0.933333333333 0" specular="0.35" shininess="0.5" />
+    <material name="wrist_gemini2_camera_mount_link_0_0_mat" rgba="0.7 0.73 0.75 0" specular="0.35" shininess="0.5" />
+    <!-- END GENERATED WRIST CAMERA ASSETS -->
   </asset>
 
   <worldbody>
@@ -113,31 +169,41 @@
                     <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="rs_seeed_green_mat" type="mesh" mesh="pla7_green" />
                     <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="rs_anodized_silver_mat" type="mesh" mesh="cnc7" />
                     <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="rs_motor_black_mat" type="mesh" mesh="motor_7" />
-                    <!-- Validated D405 eye-in-hand assembly. The mount keeps the
-                         camera 30 degrees downward and aligns the left imager
-                         with the gripper centreline. Visual only: no extra
-                         collision or inertial terms are added. -->
-                    <geom name="d405_wrist_mount" type="mesh" mesh="d405_wrist_mount"
-                          pos="-0.086309 -0.000001456 0.000001" quat="0.5 0.5 0.5 0.5"
-                          group="1" contype="0" conaffinity="0" material="d405_mount_mat" />
-                    <geom name="d405_camera_body" type="box" size="0.021 0.021 0.0115"
-                          pos="-0.078896708 -0.009 0.066321644"
-                          xyaxes="0 1 0 0.5 0 0.866025404"
-                          group="1" contype="0" conaffinity="0" material="d405_housing_mat" />
-                    <geom name="d405_camera_front" type="box" size="0.0202 0.0202 0.001"
-                          pos="-0.068071708 -0.009 0.060071644"
-                          xyaxes="0 1 0 0.5 0 0.866025404"
-                          group="1" contype="0" conaffinity="0" material="d405_front_mat" />
-                    <geom name="d405_left_imager" type="cylinder" size="0.0055 0.0012"
-                          pos="-0.066166 -0.0000 0.058972"
-                          xyaxes="0 1 0 0.5 0 0.866025404"
-                          group="1" contype="0" conaffinity="0" material="d405_lens_mat" />
-                    <geom name="d405_right_imager" type="cylinder" size="0.0055 0.0012"
-                          pos="-0.066166 -0.0180 0.058972"
-                          xyaxes="0 1 0 0.5 0 0.866025404"
-                          group="1" contype="0" conaffinity="0" material="d405_lens_mat" />
-                    <camera name="wrist_rgb" pos="-0.072141710 0 0.062421644"
-                            xyaxes="0 -1 0 0.5 0 0.866025404" fovy="62.82" />
+                    <!-- BEGIN GENERATED WRIST CAMERA GEOMS -->
+                    <geom name="wrist_d405_camera_mount_link_0_0" type="mesh" mesh="wrist_mounts_D405_305_Mount" pos="-0.1201 0.0003 0.0507" quat="0.502384668195 0.507205266179 0.498692788059 0.491587190903" material="wrist_d405_camera_mount_link_0_0_mat" group="1" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d405_camera_link_0_0" type="mesh" mesh="wrist_realsense_d405" pos="-0.105536425203 5.53145200747e-05 0.105640289847" quat="0.349674379214 0.617867364792 0.611836406866 0.348746267763" material="wrist_d405_camera_link_0_0_mat" group="1" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_mount_link_0_0" type="mesh" mesh="wrist_mounts_D435_Gemini2_Mount" pos="-0.1201 0.0003 0.045" quat="0.502384668195 0.507205266179 0.498692788059 0.491587190903" material="wrist_d435i_camera_mount_link_0_0_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_link_0_0" type="mesh" mesh="wrist_d435i_body_00" pos="-0.109889601633 -0.000146816153831 0.0927925951699" quat="0.360590999311 0.618596920032 0.609616323886 0.340117508214" material="wrist_d435i_camera_link_0_0_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_link_0_1" type="mesh" mesh="wrist_d435i_body_01" pos="-0.109889601633 -0.000146816153831 0.0927925951699" quat="0.360590999311 0.618596920032 0.609616323886 0.340117508214" material="wrist_d435i_camera_link_0_1_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_link_0_2" type="mesh" mesh="wrist_d435i_body_02" pos="-0.109889601633 -0.000146816153831 0.0927925951699" quat="0.360590999311 0.618596920032 0.609616323886 0.340117508214" material="wrist_d435i_camera_link_0_2_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_link_0_3" type="mesh" mesh="wrist_d435i_body_03" pos="-0.109889601633 -0.000146816153831 0.0927925951699" quat="0.360590999311 0.618596920032 0.609616323886 0.340117508214" material="wrist_d435i_camera_link_0_3_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_link_0_4" type="mesh" mesh="wrist_d435i_body_04" pos="-0.109889601633 -0.000146816153831 0.0927925951699" quat="0.360590999311 0.618596920032 0.609616323886 0.340117508214" material="wrist_d435i_camera_link_0_4_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_link_0_5" type="mesh" mesh="wrist_d435i_body_05" pos="-0.109889601633 -0.000146816153831 0.0927925951699" quat="0.360590999311 0.618596920032 0.609616323886 0.340117508214" material="wrist_d435i_camera_link_0_5_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_link_0_6" type="mesh" mesh="wrist_d435i_body_06" pos="-0.109889601633 -0.000146816153831 0.0927925951699" quat="0.360590999311 0.618596920032 0.609616323886 0.340117508214" material="wrist_d435i_camera_link_0_6_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_link_0_7" type="mesh" mesh="wrist_d435i_body_07" pos="-0.109889601633 -0.000146816153831 0.0927925951699" quat="0.360590999311 0.618596920032 0.609616323886 0.340117508214" material="wrist_d435i_camera_link_0_7_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_link_0_8" type="mesh" mesh="wrist_d435i_body_08" pos="-0.109889601633 -0.000146816153831 0.0927925951699" quat="0.360590999311 0.618596920032 0.609616323886 0.340117508214" material="wrist_d435i_camera_link_0_8_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_link_0_9" type="mesh" mesh="wrist_d435i_body_09" pos="-0.109889601633 -0.000146816153831 0.0927925951699" quat="0.360590999311 0.618596920032 0.609616323886 0.340117508214" material="wrist_d435i_camera_link_0_9_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_link_0_10" type="mesh" mesh="wrist_d435i_body_10" pos="-0.109889601633 -0.000146816153831 0.0927925951699" quat="0.360590999311 0.618596920032 0.609616323886 0.340117508214" material="wrist_d435i_camera_link_0_10_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_link_0_11" type="mesh" mesh="wrist_d435i_body_11" pos="-0.109889601633 -0.000146816153831 0.0927925951699" quat="0.360590999311 0.618596920032 0.609616323886 0.340117508214" material="wrist_d435i_camera_link_0_11_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_link_0_12" type="mesh" mesh="wrist_d435i_body_12" pos="-0.109889601633 -0.000146816153831 0.0927925951699" quat="0.360590999311 0.618596920032 0.609616323886 0.340117508214" material="wrist_d435i_camera_link_0_12_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_link_0_13" type="mesh" mesh="wrist_d435i_body_13" pos="-0.109889601633 -0.000146816153831 0.0927925951699" quat="0.360590999311 0.618596920032 0.609616323886 0.340117508214" material="wrist_d435i_camera_link_0_13_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_link_0_14" type="mesh" mesh="wrist_d435i_body_14" pos="-0.109889601633 -0.000146816153831 0.0927925951699" quat="0.360590999311 0.618596920032 0.609616323886 0.340117508214" material="wrist_d435i_camera_link_0_14_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_link_0_15" type="mesh" mesh="wrist_d435i_body_15" pos="-0.109889601633 -0.000146816153831 0.0927925951699" quat="0.360590999311 0.618596920032 0.609616323886 0.340117508214" material="wrist_d435i_camera_link_0_15_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_link_0_16" type="mesh" mesh="wrist_d435i_body_16" pos="-0.109889601633 -0.000146816153831 0.0927925951699" quat="0.360590999311 0.618596920032 0.609616323886 0.340117508214" material="wrist_d435i_camera_link_0_16_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_link_0_17" type="mesh" mesh="wrist_d435i_body_17" pos="-0.109889601633 -0.000146816153831 0.0927925951699" quat="0.360590999311 0.618596920032 0.609616323886 0.340117508214" material="wrist_d435i_camera_link_0_17_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_d435i_camera_link_0_18" type="mesh" mesh="wrist_d435i_body_18" pos="-0.109889601633 -0.000146816153831 0.0927925951699" quat="0.360590999311 0.618596920032 0.609616323886 0.340117508214" material="wrist_d435i_camera_link_0_18_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_gemini2_camera_link_0_0" type="mesh" mesh="wrist_gemini2_base_link" pos="-0.1297626566 0.000544467656946 0.0903244658512" quat="0.964709786723 0.00292110170787 0.263097608933 -0.0103025598233" material="wrist_gemini2_camera_link_0_0_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_gemini2_camera_botter_screw_frame_0_0" type="mesh" mesh="wrist_gemini2_camera_botter_screw_frame" pos="-0.1297626566 0.000544467656946 0.0903244658512" quat="0.964709786723 0.00292110170787 0.263097608933 -0.0103025598233" material="wrist_gemini2_camera_botter_screw_frame_0_0_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_gemini2_camera_right_ir_frame_0_0" type="mesh" mesh="wrist_gemini2_camera_infra1_frame" pos="-0.111110779858 -0.024861476848 0.0935187756441" quat="0.964709786723 0.00292110170787 0.263097608933 -0.0103025598233" material="wrist_gemini2_camera_right_ir_frame_0_0_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_gemini2_camera_right_ir_optical_frame_0_0" type="mesh" mesh="wrist_gemini2_camera_infra1_optical_frame" pos="-0.111110779858 -0.024861476848 0.0935187756441" quat="0.347115359838 -0.607291867062 0.620515528594 -0.354496817953" material="wrist_gemini2_camera_right_ir_optical_frame_0_0_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_gemini2_camera_color_frame_0_0" type="mesh" mesh="wrist_gemini2_camera_color_frame" pos="-0.108692235209 0.0110901822432 0.0925611377126" quat="0.964709786723 0.00292110170787 0.263097608933 -0.0103025598233" material="wrist_gemini2_camera_color_frame_0_0_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_gemini2_camera_color_optical_frame_0_0" type="mesh" mesh="wrist_gemini2_camera_color_optical_frame" pos="-0.108692235209 0.0110901822432 0.0925611377126" quat="0.347115359838 -0.607291867062 0.620515528594 -0.354496817953" material="wrist_gemini2_camera_color_optical_frame_0_0_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_gemini2_camera_left_ir_frame_0_0" type="mesh" mesh="wrist_gemini2_camera_infra2_frame" pos="-0.110040028325 0.0251270563394 0.0935295192993" quat="0.964709786723 0.00292110170787 0.263097608933 -0.0103025598233" material="wrist_gemini2_camera_left_ir_frame_0_0_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_gemini2_camera_left_ir_optical_frame_0_0" type="mesh" mesh="wrist_gemini2_camera_infra2_optical_frame" pos="-0.110040028325 0.0251270563394 0.0935295192993" quat="0.347115359838 -0.607291867062 0.620515528594 -0.354496817953" material="wrist_gemini2_camera_left_ir_optical_frame_0_0_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_gemini2_camera_depth_frame_0_0" type="mesh" mesh="wrist_gemini2_camera_depth_frame" pos="-0.110040028325 0.0251270563394 0.0935295192993" quat="0.964709786723 0.00292110170787 0.263097608933 -0.0103025598233" material="wrist_gemini2_camera_depth_frame_0_0_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_gemini2_camera_mount_link_0_0" type="mesh" mesh="wrist_mounts_D435_Gemini2_Mount" pos="-0.1201 0.0003 0.045" quat="0.502384668195 0.507205266179 0.498692788059 0.491587190903" material="wrist_gemini2_camera_mount_link_0_0_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <camera name="wrist_rgb" pos="-0.108727455312 0.00907532251669 0.107614316844" quat="-0.611836406866 -0.348746267763 0.349674379214 0.617867364792" fovy="62.82" />
+                    <!-- END GENERATED WRIST CAMERA GEOMS -->
                     <geom name="gripper_palm_collision" pos="0 0 0" rgba="0 0 0 0" group="3"
                           contype="1" conaffinity="1" condim="6" type="mesh" mesh="gripper_end"
                           friction="1.2 0.10 0.02" solref="0.002 1" solimp="0.98 0.995 0.0005" />

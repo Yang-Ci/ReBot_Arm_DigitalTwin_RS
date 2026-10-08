@@ -67,6 +67,7 @@
   let robot;
   let robotFrame;
   let ghostRobot;
+  let wristCamera;
   let ghostDisplayActive = false;
   let hardwareFeedbackDriven = false;
   let gripperGroup;
@@ -159,6 +160,11 @@
     buildControls();
     setupScene();
     setupEvents();
+    wristCamera = new window.RebotWristCamera(
+      document.getElementById('wrist-camera-model'),
+      document.getElementById('wrist-camera-model-status'),
+      styleRobot
+    );
     updateTeachingStatus();
     loadRobot();
     animate();
@@ -569,6 +575,7 @@
         }
       }
       createGhostRobot();
+      wristCamera.attach(robot, ghostRobot);
       applyPreset('ready', true);
       estimateWorkspaceEnvelope();
       rebuildEnvelope();
@@ -2771,6 +2778,7 @@
         return Number.isFinite(Number(value)) ? Number(value) : NaN;
       };
       return {
+        wristCamera: wristCamera.getDiagnostics(),
         mujocoSceneVisible: Boolean(mujocoSceneGroup && mujocoSceneGroup.visible),
         table: {
           centerX: TABLE_CENTER_X,

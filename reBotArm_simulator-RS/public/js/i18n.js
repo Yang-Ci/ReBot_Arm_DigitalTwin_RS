@@ -8,6 +8,13 @@
   const STORAGE_KEY = 'rebotarm.lang';
   const SUPPORTED = ['zh', 'en'];
   const DICT = {
+    'wrist.title': { zh: '腕部相机模型', en: 'Wrist camera model' },
+    'wrist.model': { zh: '相机装配', en: 'Camera assembly' },
+    'wrist.optionNone': { zh: '无相机', en: 'No camera' },
+    'wrist.none': { zh: '未安装腕部相机', en: 'No wrist camera installed' },
+    'wrist.loading': { zh: '正在加载 {model} 相机与支架…', en: 'Loading {model} camera and mount…' },
+    'wrist.ready': { zh: '{model} 相机与支架已安装', en: '{model} camera and mount installed' },
+    'wrist.failed': { zh: '{model} 加载失败，保留原装配，请重新选择重试。', en: '{model} failed to load. Previous assembly retained; select again to retry.' },
     'app.eyebrow': { zh: '欢迎来到reBot Arm B601-RS的世界', en: 'Welcome to reBot Arm B601-RS' },
     'app.title': { zh: 'ROS2 ReBot Arm B601-RS机械臂仿真器', en: 'ROS2 ReBot Arm B601-RS Arm Simulator' },
     'app.loading': { zh: '加载中', en: 'Loading' },
