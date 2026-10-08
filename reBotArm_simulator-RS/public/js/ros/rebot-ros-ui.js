@@ -63,9 +63,6 @@
     gravityStart: `/${NS}/gravity_compensation/start`,
     gravityStop: `/${NS}/gravity_compensation/stop`,
     gravityStatus: `/${NS}/gravity_compensation/status`,
-    gripperRelease: `/${NS}/gripper/release`,
-    gripperHold: `/${NS}/gripper/hold`,
-    gripperAssistStart: `/${NS}/gripper/assist/start`,
     gripperAssistStatus: `/${NS}/gripper/assist/status`,
     recordStart: `/${NS}/mujoco/record/start`,
     recordStop: `/${NS}/mujoco/record/stop`,
@@ -97,9 +94,6 @@
     gravityQuery: document.getElementById('ros-gravity-status-query'),
    rosOpenGripper: document.getElementById('ros-open-gripper'),
    closeGripper: document.getElementById('ros-close-gripper'),
-   releaseGripper: document.getElementById('ros-release-gripper'),
-   assistGripper: document.getElementById('ros-assist-gripper'),
-   holdGripper: document.getElementById('ros-hold-gripper'),
    clearLog: document.getElementById('ros-clear-log'),
    log: document.getElementById('ros-log'),
    cameraCanvas: document.getElementById('ros-camera-canvas'),
@@ -191,6 +185,10 @@
  let latestJointPositions = null;
  let rosBackend = 'unknown';
  let latestArmEnabled = false;
+ let armStatusSeen = false;
+ let rosTargetReady = false;
+ let rosConnectionState = 'closed';
+ let rosStatusMessage = '';
   let latestJointStateAt = 0;
   let latestMujocoStateAt = 0;
   let latestGripperPosition = null;
@@ -225,7 +223,6 @@
   let gravityStatusPollInFlight = false;
   let gripperAssistPollInFlight = false;
   let gripperAssistActive = false;
-  let gripperManualFree = false;
   let activeTeachingGripperReplay = null;
   let activePresetTransition = null;
   window.addEventListener('rebot-leader-starting', () => {
@@ -286,10 +283,12 @@
      resetFeedbackRenderer();
      updateGravityStatus(false, t('msg.rosNotConnected'), 'connection');
    }
-   if (detail.state === 'open') {
-     window.setTimeout(() => {
-       runDiagnostics();
-     }, 250);
+  if (detail.state === 'open') {
+    resetRosTargetState();
+    setStatus('open', t('msg.rosBridgeConnected'));
+    window.setTimeout(() => {
+      runDiagnostics();
+    }, 250);
    }
   });
 
@@ -345,43 +344,6 @@
   els.gravityQuery.addEventListener('click', queryGravityCompensation);
  els.rosOpenGripper.addEventListener('click', () => sendGripper(OPEN_GRIPPER_M, { requireControl: true }));
  els.closeGripper.addEventListener('click', () => sendGripper(CLOSE_GRIPPER_M, { requireControl: true }));
- els.releaseGripper?.addEventListener('click', async () => {
-   const result = await guardedOptionalService(
-     REQUIRED_SERVICES.gripperRelease,
-     () => client.releaseGripper(),
-     t('msg.reqGripperRelease')
-   );
-   if (result && result.success !== false) {
-     gripperAssistActive = false;
-     gripperManualFree = true;
-   }
-   updateGripperModeDisplay();
- });
- els.assistGripper?.addEventListener('click', async () => {
-   if (!window.confirm(t('msg.gripperAssistConfirm'))) return;
-   const result = await guardedOptionalService(
-     REQUIRED_SERVICES.gripperAssistStart,
-     () => client.startGripperAssist(),
-     t('msg.reqGripperAssist')
-   );
-   if (result && result.success !== false) {
-     gripperAssistActive = true;
-     gripperManualFree = false;
-   }
-   updateGripperModeDisplay();
- });
- els.holdGripper?.addEventListener('click', async () => {
-   const result = await guardedOptionalService(
-     REQUIRED_SERVICES.gripperHold,
-     () => client.holdGripper(),
-     t('msg.reqGripperHold')
-   );
-   if (result && result.success !== false) {
-     gripperAssistActive = false;
-     gripperManualFree = false;
-   }
-   updateGripperModeDisplay();
- });
  els.clearLog.addEventListener('click', () => { els.log.innerHTML = ''; });
   els.checkIk.addEventListener('click', checkIk);
   document.getElementById('ros-help-top')?.addEventListener('click', () => document.getElementById('ros-help-dialog')?.showModal());
@@ -1046,6 +1008,7 @@
   }
 
   function handleArmStatus(msg) {
+    armStatusSeen = true;
     latestArmEnabled = Boolean(msg.enabled);
     const enabled = msg.enabled ? t('st.enabled') : t('st.disabled');
     const mode = msg.mode || 'unknown';
@@ -1058,6 +1021,7 @@
     if (hardwareTeachActive && hardwareTeachModeConfirmed && machine !== 'GRAVITY_COMP') {
       void stopHardwareTeaching(false);
     }
+    updateRosTargetReady();
     updateDiagnostics();
   }
 
@@ -1108,7 +1072,6 @@
       hardwareTeachActive = true;
       hardwareTeachGravityStarted = true;
       gripperAssistActive = true;
-      gripperManualFree = false;
       updateGripperModeDisplay();
       if (!els.mirror.checked) els.mirror.checked = true;
       if (!window.reBotSim.beginHardwareTeaching()) {
@@ -1870,6 +1833,10 @@
       client.disconnect();
       return;
     }
+    if (!rosTargetReady) {
+      client.disconnect();
+      return;
+    }
 
     safeDisconnectBusy = true;
     els.disconnect.disabled = true;
@@ -1936,11 +1903,6 @@
     try {
       const result = await client.gripperAssistStatus();
       gripperAssistActive = Boolean(result && result.success);
-      gripperManualFree = Boolean(
-        result
-        && typeof result.message === 'string'
-        && result.message.includes('released for manual')
-      );
       updateGripperModeDisplay();
     } catch (_error) {
       // Connection diagnostics report transport failures; retain the last
@@ -1954,10 +1916,10 @@
     if (!els.gripperMode) return;
     els.gripperMode.textContent = gripperAssistActive
       ? t('ros.gripperModeAssist')
-      : (gripperManualFree ? t('ros.gripperModeFree') : t('ros.gripperModeHolding'));
+      : t('ros.gripperModeHolding');
     els.gripperMode.style.color = gripperAssistActive
       ? '#ffd27a'
-      : (gripperManualFree ? '#d7fff4' : '#ffe0b0');
+      : '#ffe0b0';
   }
 
   async function runDiagnostics() {
@@ -2165,6 +2127,10 @@
      if (interactive) setStatus('closed', t('msg.rosNotConnected'));
      return false;
    }
+   if (!rosTargetReady) {
+     if (interactive) setMessage(t('msg.targetNotReady'));
+     return false;
+   }
    // RS Fake Driver is auto-allowed in simulation mode.
    if (TARGET_KEY === 'simulation' && rosBackend === 'fake-rs') return true;
     if (!els.control.checked) {
@@ -2206,6 +2172,37 @@
     }
   }
 
+  function updateRosTargetReady() {
+    if (!client.connected) {
+      if (rosTargetReady) {
+        rosTargetReady = false;
+        renderConnectionStatus();
+      }
+      return;
+    }
+
+    const now = Date.now();
+    const topics = TARGET_KEY === 'simulation'
+      ? [REQUIRED_TOPICS.jointStates, REQUIRED_TOPICS.mujocoJointStates]
+      : [REQUIRED_TOPICS.jointStates];
+    const jointFeedbackFresh = topics.some((topic) => now - client.getLastMessageAt(topic) < 1000);
+    const nextReady = armStatusSeen && jointFeedbackFresh;
+    if (nextReady === rosTargetReady) return;
+
+    rosTargetReady = nextReady;
+    rosStatusMessage = t(nextReady ? 'msg.targetReady' : 'msg.targetNotReady');
+    renderConnectionStatus();
+  }
+
+  function resetRosTargetState() {
+    armStatusSeen = false;
+    rosTargetReady = false;
+    rosBackend = 'unknown';
+    latestArmEnabled = false;
+    listedTopics.clear();
+    listedServices.clear();
+  }
+
   function canConnectWebSocketUrl(url) {
     if (window.location.protocol === 'https:' && /^ws:\/\//i.test(url)) {
       const message = t('msg.httpsWsBlocked');
@@ -2233,6 +2230,10 @@
  async function guardedCall(call, optimisticMessage, allowWithoutControl, options) {
    if (!client.connected) {
      setStatus('closed', t('msg.rosNotConnected'));
+     return null;
+   }
+   if (!rosTargetReady) {
+     setMessage(t('msg.targetNotReady'));
      return null;
    }
     if (!allowWithoutControl && !controlAllowed(false)) {
@@ -2276,6 +2277,7 @@
   }
 
   function updateDiagnostics() {
+    updateRosTargetReady();
     updateCameraStatusFromTopic();
   }
 
@@ -2530,7 +2532,7 @@
     const pose = poseFromVisionTarget(getVisionApproachZ(target), target);
     if (!pose) return;
     writePoseInputs(pose);
-    if (client.connected) client.publishTargetPose(pose);
+    if (client.connected && controlAllowed(false)) client.publishTargetPose(pose);
     setMessage(t('msg.visionFillPose'));
     writeLog('视觉目标 -> Pose 输入框', 'ok');
   }
@@ -3618,7 +3620,6 @@
 
   function publishGripperWidthCommand(width) {
     gripperAssistActive = false;
-    gripperManualFree = false;
     updateGripperModeDisplay();
     client.publishGripperCommand(gripperWidthToMotor(width), GRIPPER_VLIM_RAD_S);
   }
@@ -3696,20 +3697,31 @@
  }
 
   function setStatus(state, message) {
+    rosConnectionState = state;
+    rosStatusMessage = message;
+    renderConnectionStatus();
+  }
+
+  function renderConnectionStatus() {
     els.status.className = 'mini-pill';
-    if (state === 'open') {
-      els.status.classList.add('online');
-      els.status.textContent = t('st.online');
-    } else if (state === 'connecting') {
+    if (rosConnectionState === 'open') {
+      if (rosTargetReady) {
+        els.status.classList.add('online');
+        els.status.textContent = t('st.online');
+      } else {
+        els.status.classList.add('warn');
+        els.status.textContent = t('st.bridgeOnline');
+      }
+    } else if (rosConnectionState === 'connecting') {
       els.status.classList.add('warn');
       els.status.textContent = t('st.connecting');
-    } else if (state === 'error') {
+    } else if (rosConnectionState === 'error') {
       els.status.classList.add('error');
       els.status.textContent = t('st.error');
     } else {
       els.status.textContent = t('st.offline');
     }
-    setMessage(message);
+    setMessage(rosStatusMessage);
   }
 
   function setMessage(message) {
@@ -3735,13 +3747,7 @@
       if (els.visionPlaceDemo && !visionSequenceBusy) {
         els.visionPlaceDemo.textContent = t('camera.place');
       }
-      if (els.status) {
-        if (client.connected) {
-          els.status.textContent = t('st.online');
-        } else {
-          els.status.textContent = t('st.offline');
-        }
-      }
+      if (els.status) renderConnectionStatus();
     });
   }
 

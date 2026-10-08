@@ -45,14 +45,6 @@ class ArmServices:
             (SetGripper, "gripper/set", self.set_gripper, node.reentrant_group),
             (GripperCommand, "gripper/open", self.open_gripper, node.slow_group),
             (GripperCommand, "gripper/close", self.close_gripper, node.slow_group),
-            (Trigger, "gripper/release", self.release_gripper, node.slow_group),
-            (Trigger, "gripper/hold", self.hold_gripper, node.slow_group),
-            (
-                Trigger,
-                "gripper/assist/start",
-                self.start_gripper_assist,
-                node.slow_group,
-            ),
             (
                 Trigger,
                 "gripper/assist/status",
@@ -226,38 +218,13 @@ class ArmServices:
             request, response, self._hardware.gripper_close_position, "close"
         )
 
-    def release_gripper(self, _request, response):
-        return self._run(
-            response,
-            self._hardware.release_gripper_for_manual,
-            "gripper released for manual movement",
-        )
-
-    def hold_gripper(self, _request, response):
-        return self._run(
-            response,
-            self._hardware.hold_gripper_current,
-            "gripper holding current position",
-        )
-
-    def start_gripper_assist(self, _request, response):
-        return self._run(
-            response,
-            self._hardware.start_gripper_assist,
-            "gripper low-resistance assist active",
-        )
-
     def gripper_assist_status(self, _request, response):
         active = self._hardware.gripper_assist_active()
         response.success = bool(active)
         response.message = (
             "gripper low-resistance assist active"
             if active
-            else (
-                "gripper released for manual movement"
-                if self._hardware.gripper_manual_free()
-                else "gripper position hold active"
-            )
+            else "gripper position hold active"
         )
         return response
 
