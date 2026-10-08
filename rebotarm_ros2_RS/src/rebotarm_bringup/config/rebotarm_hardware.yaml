@@ -34,6 +34,15 @@ models:
         # original high-stiffness baseline.
         mit_kp: [80.0, 150.0, 150.0, 50.0, 50.0, 50.0]
         mit_kd: [5.0, 10.0, 10.0, 5.0, 4.0, 4.0]
+        # Seeed's RS follower gains with gravity_compensation=True. Leader
+        # mode already uses cached gravity feedforward and sends v_des=0.
+        # Source: Seeed-Projects/lerobot-robot-seeed-b601 @ 0da1a1a
+        leader_mit_kp: [50.0, 50.0, 50.0, 30.0, 50.0, 50.0]
+        leader_mit_kd: [3.0, 5.0, 5.0, 3.0, 4.0, 4.0]
+        # Leader gripper only: avoid the old 1.5 rad/s catch-up bottleneck.
+        # Still scales with the session speed (6 * speed) and is capped at
+        # the ordinary gripper maximum of 5 rad/s by the adapter.
+        leader_gripper_velocity_limit: 3.0
         # Online joint/TCP stream profile.  Velocity is still supplied by the
         # incoming command; these values bound acceleration and jerk.
         stream_acceleration_limit: 4.0

@@ -38,7 +38,7 @@
       this.connected = Boolean(status?.port) && status.state !== 'DISCONNECTED';
       this.element.hidden = !this.connected || !visible;
       const sampleAge = Number(status?.sample_age) + (Date.now() - this.statusSeenAt) / 1000;
-      this.sampleFresh = Boolean(fresh && Number.isFinite(status?.sample_age) && status.sample_age >= 0 && sampleAge < 0.2);
+      this.sampleFresh = Boolean(fresh && Number.isFinite(status?.sample_age) && status.sample_age >= 0 && sampleAge < 0.3);
       const joints = this.sampleFresh ? mapLeaderModelAngles(status.angles_deg) : null;
       this.sampleFresh = Boolean(joints);
       if (joints) { this.joints = joints; this.applyPose(); }

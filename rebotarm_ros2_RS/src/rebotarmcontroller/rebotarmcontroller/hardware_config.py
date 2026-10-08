@@ -131,12 +131,26 @@ def _add_runtime_config(data: dict[str, Any]) -> None:
     n = len(arm_joints)
     gravity_config = data.get("gravity_compensation", {}) or {}
     control_config = data.get("control", {}) or {}
+    mit_kp = _control_gain(data, arm_joints, control_config, "mit_kp", "kp")
+    mit_kd = _control_gain(data, arm_joints, control_config, "mit_kd", "kd")
 
     data["_runtime"] = {
         "control": {
             "arm_control_mode": _arm_control_mode(data),
-            "mit_kp": _control_gain(data, arm_joints, control_config, "mit_kp", "kp"),
-            "mit_kd": _control_gain(data, arm_joints, control_config, "mit_kd", "kd"),
+            "mit_kp": mit_kp,
+            "mit_kd": mit_kd,
+            "leader_mit_kp": _nonnegative_vector(
+                control_config.get("leader_mit_kp", mit_kp),
+                n, "control.leader_mit_kp",
+            ),
+            "leader_mit_kd": _nonnegative_vector(
+                control_config.get("leader_mit_kd", mit_kd),
+                n, "control.leader_mit_kd",
+            ),
+            "leader_gripper_velocity_limit": _positive_scalar(
+                control_config.get("leader_gripper_velocity_limit", 1.5),
+                "control.leader_gripper_velocity_limit",
+            ),
             "stream_acceleration_limit": _positive_scalar(
                 control_config.get("stream_acceleration_limit", 4.0),
                 "control.stream_acceleration_limit",

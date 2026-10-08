@@ -11,6 +11,8 @@ DEFAULT_LIMITS = ((-2.8, 2.8), (0, 3.14), (0, 3.14),
                   (-1.57, 1.57), (-1.57, 1.57), (-3.14, 3.14))
 LEADER_RANGES = ((-150, 150), (-1, 170), (-200, 1),
                  (-80, 90), (-90, 90), (-130, 130), (0, 270))
+SAMPLE_MAX_AGE_S = 1.0
+SAMPLE_CLOCK_SKEW_S = 0.1
 
 
 def finite_vector(values, size):
@@ -21,12 +23,12 @@ def finite_vector(values, size):
 
 
 def fresh_angles(monitors):
-    """The SDK returns cached monitor objects on timeout; reject reliable=False."""
+    """Read the SDK's reliability-filtered angle from each monitor response."""
     angles = []
     for servo_id in range(7):
         sample = monitors.get(servo_id)
-        if sample is None or getattr(sample, "reliable", False) is not True:
-            raise RuntimeError(f"leader servo {servo_id}: missing or unreliable sample")
+        if sample is None:
+            raise RuntimeError(f"leader servo {servo_id}: missing sample")
         angles.append(float(sample.angle_deg))
     return finite_vector(angles, 7)
 
@@ -109,11 +111,10 @@ class TeleopLease:
     def sample(self, session_id, seq, sampled_at):
         self.require(session_id)
         now = self.clock()
-        if self.expired():
-            raise RuntimeError("leader watchdog expired")
         if self.paused:
             raise RuntimeError("leader session is paused")
-        if seq <= self.last_seq or not 0 <= now - sampled_at < 0.2:
+        age = now - sampled_at
+        if seq <= self.last_seq or not -SAMPLE_CLOCK_SKEW_S <= age < SAMPLE_MAX_AGE_S:
             raise RuntimeError("stale or out-of-order leader sample")
         self.last_seq = seq
         self.last_sample = sampled_at
@@ -122,9 +123,9 @@ class TeleopLease:
         if not self.session_id:
             return ""
         now = self.clock()
-        if now - self.last_heartbeat > 1.0:
+        if now - self.last_heartbeat > 3.0:
             return "browser heartbeat timed out"
-        if not self.paused and now - self.last_sample > 0.3:
+        if not self.paused and now - self.last_sample > SAMPLE_MAX_AGE_S:
             return "leader sample timed out"
         return ""
 

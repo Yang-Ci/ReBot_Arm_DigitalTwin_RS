@@ -8,11 +8,15 @@ from .leader_policy import DEFAULT_LIMITS, TeleopLease, finite_vector
 
 
 class FakeLeaderHardware:
+    teleop_speed_max = 1.0
+
     def __init__(self, node):
         self.node = node
         self._cmd_lock = node._leader_lock
         self._teleop_lease = TeleopLease()
         self.teleop_limits = DEFAULT_LIMITS
+        configured_speed = float(getattr(node, "max_joint_speed", 1.0))
+        self.teleop_speed_max = max(0.05, min(1.0, configured_speed))
         self.gripper_close_position = 0.0
         self.gripper_open_position = node.gripper_open_position
         self.has_gripper = True
@@ -45,8 +49,10 @@ class FakeLeaderHardware:
             targets = finite_vector(targets, 6)
             if any(not lo <= value <= hi for value, (lo, hi) in zip(targets, self.teleop_limits)):
                 raise ValueError("target out of limits")
-            if not math.isfinite(speed) or not 0.05 <= speed <= 0.6:
-                raise ValueError("invalid leader speed")
+            if not math.isfinite(speed) or not 0.05 <= speed <= self.teleop_speed_max:
+                raise ValueError(
+                    f"invalid leader speed: 0.05..{self.teleop_speed_max:g} rad/s"
+                )
             if gripper is not None and (not math.isfinite(gripper) or not 0 <= gripper <= self.gripper_open_position):
                 raise ValueError("invalid gripper target")
             self._teleop_lease.sample(session, seq, sampled_at)
@@ -54,7 +60,7 @@ class FakeLeaderHardware:
             self.node.max_joint_speed = speed
             if gripper is not None:
                 self.node.gripper_target = gripper
-                self.node.max_gripper_speed = min(speed * 6, 1.5)
+                self.node.max_gripper_speed = min(speed * 6, 3.0)
             self.node.state_machine = "LOWLEVEL_STREAMING"
 
     def _hold(self):
