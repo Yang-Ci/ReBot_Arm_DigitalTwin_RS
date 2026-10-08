@@ -9,6 +9,8 @@ import time
 
 from rebotarmcontroller.leader_policy import fresh_angles
 
+SAMPLE_RATE_HZ = 60.0
+
 
 def emit(**value):
     print(json.dumps(value, allow_nan=False), flush=True)
@@ -52,7 +54,7 @@ def run(port, probe=False, zero=False, unlock=False):
                 emit(event="sample", angles=angles, seq=seq, at=began)
             except Exception as exc:
                 emit(event="error", message=str(exc))
-            time.sleep(max(0, 1 / 30 - (time.monotonic() - began)))
+            time.sleep(max(0, 1 / SAMPLE_RATE_HZ - (time.monotonic() - began)))
     except Exception as exc:
         emit(event="fatal", message=str(exc))
     finally:

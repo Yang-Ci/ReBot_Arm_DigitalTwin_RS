@@ -11,6 +11,33 @@ DEFAULT_MAX_SUBSTEP_S = 0.005
 DEFAULT_MAX_ELAPSED_S = 0.1
 
 
+def advance_velocity_limited_reference(
+    position: np.ndarray,
+    velocity: np.ndarray,
+    target: np.ndarray,
+    velocity_limit: np.ndarray,
+    elapsed: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Follow the latest leader target without a second-order settling tail.
+
+    The hand-operated leader already supplies the motion trajectory. Bound
+    each reference step by the selected speed and stop exactly at the latest
+    target, including when it reverses. Acceleration is diagnostic here;
+    acceleration/jerk shaping belongs to the browser trajectory profile.
+    """
+    q = np.asarray(position, dtype=np.float64)
+    qd = np.asarray(velocity, dtype=np.float64)
+    goal = np.asarray(target, dtype=np.float64)
+    vlim = np.maximum(np.asarray(velocity_limit, dtype=np.float64), 0.0)
+    dt = float(np.clip(elapsed, 0.0005, DEFAULT_MAX_ELAPSED_S))
+    delta = goal - q
+    step = np.clip(delta, -vlim * dt, vlim * dt)
+    next_position = np.where(np.abs(delta) <= vlim * dt, goal, q + step)
+    next_velocity = (next_position - q) / dt
+    next_acceleration = (next_velocity - qd) / dt
+    return next_position, next_velocity, next_acceleration
+
+
 def advance_jerk_limited_reference(
     position: np.ndarray,
     velocity: np.ndarray,

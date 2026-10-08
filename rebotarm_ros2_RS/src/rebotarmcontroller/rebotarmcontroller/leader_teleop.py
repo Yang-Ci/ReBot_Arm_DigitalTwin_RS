@@ -15,7 +15,7 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rebotarm_msgs.msg import LeaderDevice, LeaderStatus
 from rebotarm_msgs.srv import LeaderControl
 
-from .leader_policy import LeaderMapping, finite_vector
+from .leader_policy import LeaderMapping, finite_vector, SAMPLE_MAX_AGE_S, SAMPLE_CLOCK_SKEW_S
 
 
 class UartProcess:
@@ -195,13 +195,16 @@ class LeaderTeleop:
                 old.close()
         elif operation in ("start", "resume"):
             with self.lock:
-                if not self.calibrated or not self.worker or time.monotonic() - self.sample_at > 0.2:
+                if not self.calibrated or not self.worker or time.monotonic() - self.sample_at > SAMPLE_MAX_AGE_S:
                     raise RuntimeError("leader is uncalibrated or its samples are stale")
                 if operation == "start":
                     if self.session:
                         raise RuntimeError("leader session already running")
-                    if not math.isfinite(request.speed) or not 0.05 <= request.speed <= 0.6:
-                        raise ValueError("speed must be 0.05..0.6 rad/s")
+                    speed_limit = float(getattr(self.hw, "teleop_speed_max", 0.6))
+                    if not math.isfinite(request.speed) or not 0.05 <= request.speed <= speed_limit:
+                        raise ValueError(
+                            f"speed must be 0.05..{speed_limit:g} rad/s"
+                        )
                     self.speed = request.speed
                     self.follow_gripper = request.follow_gripper and self.hw.has_gripper
                     self.absolute = request.absolute
@@ -252,7 +255,8 @@ class LeaderTeleop:
                 raise RuntimeError("missing pyserial; install requirements-rs-leader.txt")
             ports = []
         else:
-            ports = list(list_ports.comports())
+            ports = [p for p in list_ports.comports()
+                     if not p.device.startswith("/dev/ttyS")]
         if selected and selected not in [p.device for p in ports]:
             from types import SimpleNamespace
             ports = [SimpleNamespace(device=selected, description="Manual port", serial_number="")]
@@ -271,10 +275,11 @@ class LeaderTeleop:
                 try:
                     probe = UartProcess(device.port, probe=True)
                     frame = probe.ready(timeout=1.5)
-                    device.responding_ids = frame.get("ids", [])
-                    device.complete = device.responding_ids == list(range(7))
+                    responding_ids = [int(i) for i in frame.get("ids", [])]
+                    device.responding_ids = responding_ids
+                    device.complete = responding_ids == list(range(7))
                     if not device.complete:
-                        device.error = "Missing IDs: " + str(sorted(set(range(7)) - set(device.responding_ids)))
+                        device.error = "Missing IDs: " + str(sorted(set(range(7)) - set(responding_ids)))
                 except Exception as exc:
                     device.error = str(exc)
                 finally:
@@ -295,8 +300,9 @@ class LeaderTeleop:
             if frame.get("event") == "sample":
                 try:
                     sampled_at = float(frame["at"])
-                    if not 0 <= time.monotonic() - sampled_at < 0.2:
-                        raise RuntimeError("UART frame is stale")
+                    age = time.monotonic() - sampled_at
+                    if not -SAMPLE_CLOCK_SKEW_S <= age < SAMPLE_MAX_AGE_S:
+                        return
                     angles = finite_vector(frame["angles"], 7)
                     seq = int(frame["seq"])
                     if seq <= self.sample_seq:
@@ -338,7 +344,7 @@ class LeaderTeleop:
             reason = self.hw.teleop_watchdog()
             if self.session and not self.hw.teleop_owned:
                 self._fault(reason or self.hw._teleop_lease.reason or "leader session ended")
-            if self.worker and self.sample_at and time.monotonic() - self.sample_at > 0.2:
+            if self.worker and self.sample_at and time.monotonic() - self.sample_at > SAMPLE_MAX_AGE_S:
                 if self.session:
                     self._fault("leader sample timed out")
             status = LeaderStatus()

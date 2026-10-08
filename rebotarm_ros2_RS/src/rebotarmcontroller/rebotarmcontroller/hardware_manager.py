@@ -8,7 +8,10 @@ import numpy as np
 
 from .conversions import fk_to_pose
 from .hardware_config import resolve_hardware_config
-from .motion_profiles import advance_jerk_limited_reference_over_elapsed
+from .motion_profiles import (
+    advance_jerk_limited_reference_over_elapsed,
+    advance_velocity_limited_reference,
+)
 from .leader_policy import TeleopLease, finite_vector
 
 _TELEOP_BLOCKED_METHODS = {
@@ -45,6 +48,8 @@ def _locked(method):
 
 class HardwareManager:
     """ROS-facing adapter for the new grouped reBotArm SDK."""
+
+    teleop_speed_max = 1.0
 
     def __init__(
         self,
@@ -86,6 +91,12 @@ class HardwareManager:
         self._robot.get_state = self._get_arm_state
         self._arm_mit_kp = np.array(control_runtime["mit_kp"], dtype=np.float64)
         self._arm_mit_kd = np.array(control_runtime["mit_kd"], dtype=np.float64)
+        self._leader_mit_kp = np.array(control_runtime["leader_mit_kp"], dtype=np.float64)
+        self._leader_mit_kd = np.array(control_runtime["leader_mit_kd"], dtype=np.float64)
+        self._leader_gripper_velocity_limit = min(
+            float(control_runtime["leader_gripper_velocity_limit"]),
+            _MAX_GRIPPER_POS_VEL_VLIM_RAD_S,
+        )
         self._stream_acceleration_limit = float(
             control_runtime["stream_acceleration_limit"]
         )
@@ -1409,6 +1420,7 @@ class HardwareManager:
             self._teleop_watchdog_locked()
             if not self._control_output_enabled:
                 return
+            leader_following = self.teleop_owned and not self._teleop_lease.paused
             now = time.perf_counter()
             loop_dt = float(np.clip(now - self._mit_stream_last_time, 0.0005, 0.1))
             self._mit_stream_last_time = now
@@ -1416,21 +1428,34 @@ class HardwareManager:
                 self.state_machine == "LOWLEVEL_STREAMING"
                 and self._mit_stream_target is not None
             ):
-                (
-                    next_position,
-                    next_velocity,
-                    next_acceleration,
-                ) = advance_jerk_limited_reference_over_elapsed(
-                    self._endpos_ctrl._q_target,
-                    self._mit_stream_velocity,
-                    self._mit_stream_acceleration,
-                    self._mit_stream_target,
-                    self._mit_stream_vlim,
-                    loop_dt,
-                    acceleration_limit=self._stream_acceleration_limit,
-                    jerk_limit=self._stream_jerk_limit,
-                    natural_frequency=self._stream_natural_frequency,
-                )
+                if leader_following:
+                    # Leader samples are already a hand-generated trajectory.
+                    # The browser's attractor adds phase lag and a long tail
+                    # after the leader stops; follow the latest target with
+                    # the session speed limit instead.
+                    next_position, next_velocity, next_acceleration = (
+                        advance_velocity_limited_reference(
+                            self._endpos_ctrl._q_target,
+                            self._mit_stream_velocity,
+                            self._mit_stream_target,
+                            self._mit_stream_vlim,
+                            loop_dt,
+                        )
+                    )
+                else:
+                    next_position, next_velocity, next_acceleration = (
+                        advance_jerk_limited_reference_over_elapsed(
+                            self._endpos_ctrl._q_target,
+                            self._mit_stream_velocity,
+                            self._mit_stream_acceleration,
+                            self._mit_stream_target,
+                            self._mit_stream_vlim,
+                            loop_dt,
+                            acceleration_limit=self._stream_acceleration_limit,
+                            jerk_limit=self._stream_jerk_limit,
+                            natural_frequency=self._stream_natural_frequency,
+                        )
+                    )
                 self._endpos_ctrl._q_target[:] = next_position
                 self._mit_stream_velocity[:] = next_velocity
                 self._mit_stream_acceleration[:] = next_acceleration
@@ -1456,9 +1481,16 @@ class HardwareManager:
                 )
                 self._arm_group.send_mit(
                     self._endpos_ctrl._q_target,
-                    vel=self._endpos_ctrl._qd_target,
-                    kp=getattr(self._arm_group, "_mit_kp"),
-                    kd=getattr(self._arm_group, "_mit_kd"),
+                    # Official RS teleoperation uses v_des=0. Differentiating
+                    # a 60 Hz position staircase at 125 Hz creates alternating
+                    # velocity pulses and Kd*v_des torque kicks. Reference
+                    # velocity remains available on the diagnostic topic.
+                    vel=(np.zeros_like(self._endpos_ctrl._qd_target) if leader_following
+                         else self._endpos_ctrl._qd_target),
+                    kp=(self._leader_mit_kp if leader_following
+                        else getattr(self._arm_group, "_mit_kp")),
+                    kd=(self._leader_mit_kd if leader_following
+                        else getattr(self._arm_group, "_mit_kd")),
                     tau=tau_ff,
                 )
             else:
@@ -1509,8 +1541,9 @@ class HardwareManager:
 
     @_locked
     def teleop_heartbeat(self, session):
-        if self._teleop_watchdog_locked():
-            raise RuntimeError("leader session timed out")
+        watchdog_reason = self._teleop_watchdog_locked()
+        if watchdog_reason:
+            raise RuntimeError(watchdog_reason)
         self._teleop_lease.heartbeat(session)
 
     @_locked
@@ -1541,14 +1574,18 @@ class HardwareManager:
 
     @_locked
     def teleop_send(self, session, seq, sampled_at, targets, gripper, speed):
-        self._teleop_watchdog_locked()
+        watchdog_reason = self._teleop_watchdog_locked()
+        if watchdog_reason:
+            raise RuntimeError(watchdog_reason)
         self._teleop_lease.require(session)
         target = finite_vector(targets, 6)
         for value, (lo, hi) in zip(target, self.teleop_limits):
             if not lo <= value <= hi:
                 raise ValueError("leader target outside follower URDF limits")
-        if not np.isfinite(speed) or not 0.05 <= speed <= 0.6:
-            raise ValueError("leader speed must be 0.05..0.6 rad/s")
+        if not np.isfinite(speed) or not 0.05 <= speed <= self.teleop_speed_max:
+            raise ValueError(
+                f"leader speed must be 0.05..{self.teleop_speed_max:g} rad/s"
+            )
         if time.monotonic() - self._feedback_refreshed_at > 0.5:
             self._hold_teleop_locked()
             self._teleop_lease.release("follower feedback timed out")
@@ -1563,7 +1600,7 @@ class HardwareManager:
         self._mit_stream_vlim.fill(speed)
         if gripper is not None:
             self._mit_gripper_target = float(gripper)
-            self._mit_gripper_vlim = min(speed * 6, 1.5)
+            self._mit_gripper_vlim = min(speed * 6, self._leader_gripper_velocity_limit)
         self.set_state_machine("LOWLEVEL_STREAMING")
 
     def _hold_teleop_locked(self):

@@ -9,6 +9,10 @@
   const topic = '/' + client.namespace + '/leader/status';
   const model = window.LeaderModelPreview ? new window.LeaderModelPreview(document.getElementById('leader-model')) : null;
   window.reBotLeaderModel = model;
+  const speedInput = $('speed');
+  if (speedInput) {
+    speedInput.max = '1';
+  }
   const words = {
     title: ['Leader 遥操作', 'Leader teleoperation'],
     scan: ['扫描主臂', 'Scan leader'], connect: ['连接', 'Connect'], disconnect: ['断开主臂', 'Disconnect leader'],
@@ -69,7 +73,7 @@
     $('calibrate').disabled = busy || !fresh() || !connected || occupied || !$('zero').checked;
     $('unlock').disabled = busy || !fresh() || !connected || occupied;
     $('disconnect').disabled = busy || !client.connected || !connected || (occupied && !ours());
-    $('start').disabled = busy || !fresh() || !status.calibrated || occupied || !inRos() || !controlLock?.checked || status.sample_age < 0 || status.sample_age >= 0.2;
+    $('start').disabled = busy || !fresh() || !status.calibrated || occupied || !inRos() || !controlLock?.checked || status.sample_age < 0 || status.sample_age >= 0.3;
     $('pause').disabled = busy || !fresh() || !ours() || !status.following;
     $('resume').disabled = busy || !fresh() || !ours() || !status.paused || !controlLock?.checked || !inRos();
     $('stop').disabled = busy || !client.connected || !session;

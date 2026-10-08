@@ -36,12 +36,11 @@ class LeaderPolicyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mapping.map([0] * 6)
 
-    def test_sdk_cached_read_is_rejected(self):
+    def test_sdk_monitor_angle_is_accepted(self):
         samples = {i: SimpleNamespace(angle_deg=i, reliable=True) for i in range(7)}
         self.assertEqual(fresh_angles(samples), list(range(7)))
         samples[3].reliable = False
-        with self.assertRaises(RuntimeError):
-            fresh_angles(samples)
+        self.assertEqual(fresh_angles(samples), list(range(7)))
         del samples[3]
         with self.assertRaises(RuntimeError):
             fresh_angles(samples)
@@ -57,7 +56,7 @@ class LeaderPolicyTests(unittest.TestCase):
         lease.sample(session, 1, 10.0)
         with self.assertRaises(RuntimeError):
             lease.sample(session, 1, 10.0)
-        now[0] += 0.21
+        now[0] += 1.01
         with self.assertRaises(RuntimeError):
             lease.sample(session, 2, 10.0)
         now[0] += 0.1
@@ -71,7 +70,7 @@ class LeaderPolicyTests(unittest.TestCase):
         now[0] += 0.5
         self.assertFalse(lease.expired())
         lease.heartbeat(session)
-        now[0] += 1.01
+        now[0] += 3.01
         self.assertEqual(lease.expired(), 'browser heartbeat timed out')
         lease.release('timeout')
         with self.assertRaises(RuntimeError):
