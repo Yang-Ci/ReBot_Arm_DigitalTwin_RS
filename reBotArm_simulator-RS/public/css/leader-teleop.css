@@ -1,0 +1,15 @@
+#leader-panel .leader-readout { font: 12px/1.8 monospace; white-space: normal; overflow-wrap: anywhere; margin: 12px 0; }
+#leader-panel #leader-message { overflow-wrap: anywhere; }
+#leader-panel button:disabled { opacity: .45; cursor: not-allowed; }
+#leader-panel #leader-stop { border-color: #d08062; }
+#leader-panel #leader-calibrate { grid-column: 1 / -1; }
+#leader-panel .leader-tip { font-size: 12px; line-height: 1.6; color: #a6b4b0; }
+.leader-model { margin: 12px 0 16px; border: 1px solid #33493c; border-radius: 10px; overflow: hidden; background: #161d19; }
+.leader-model[hidden] { display: none; }
+.leader-model-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px; }
+.leader-model-title { font-size: 12px; }
+#leader-panel .leader-model-reset { padding: 5px 8px; font-size: 11px; flex-shrink: 0; }
+.leader-model-host { width: 100%; height: 235px; }
+.leader-model-host canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.leader-model-note { margin: 0; padding: 8px 10px; font-size: 11px; color: #b7c6bd; line-height: 1.6; }
+.leader-model.is-stale .leader-model-note { color: #e0b886; }

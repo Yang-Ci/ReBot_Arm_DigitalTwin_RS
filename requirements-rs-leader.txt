@@ -1,0 +1,3 @@
+# Optional UART-only dependencies. No LeRobot/PyTorch install is needed for ROS follow.
+motorbridge-smart-servo==0.0.4
+pyserial==3.5

@@ -1,0 +1,12 @@
+builtin_interfaces/Time stamp
+string state
+string message
+string port
+string session_id
+bool calibrated
+bool following
+bool paused
+float64 sample_age
+float64 sample_hz
+float64[] angles_deg
+float64[] targets_rad

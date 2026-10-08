@@ -193,7 +193,9 @@ class ArmServices:
             response.message = "IK target accepted" if ok else "IK failed"
             response.q_solution = q_solution
         except Exception as exc:
-            self._hardware.hold_current_position()
+            with self._hardware._cmd_lock:
+                if not self._hardware.teleop_owned:
+                    self._hardware.hold_current_position()
             response.success = False
             response.message = str(exc)
             response.q_solution = []
