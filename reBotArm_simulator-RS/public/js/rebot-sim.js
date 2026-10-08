@@ -7,6 +7,11 @@
   const GRIPPER_VISUAL_MAX = 0.05;
   const GRIPPER_FINGER_TRAVEL_M = 0.05;
   const GRIPPER_ANIMATION_MS = 520;
+  const WEB_FOLLOW_LIMITS = Object.freeze({ radius: 0.16, minHeight: 0.10, maxHeight: 0.65,
+    maxPlanarReach: 0.50, tcpSpeed: 0.15, jointSpeed: 0.80, jointAcceleration: 1.80,
+    gripperSpeed: 0.08 });
+  const WEB_FOLLOW_JOINT_LIMITS = Object.freeze({ joint1: [-1.2, 1.2], joint2: [0.10, 1.6],
+    joint3: [0.15, 1.8], joint4: [-1.0, 1.2], joint5: [-1.2, 1.2], joint6: [-1.6, 1.6] });
  const URDF_HAS_BUILTIN_GRIPPER = true;
  const GRIPPER_MESH_VERSION = 'rs-v1';
   const FAKE_GRASP_LOCAL_OFFSET = new THREE.Vector3(-0.05, 0, -0.02);
@@ -69,6 +74,7 @@
   let ghostRobot;
   let ghostDisplayActive = false;
   let hardwareFeedbackDriven = false;
+  let webFollow = null;
   let gripperGroup;
   let ghostGripperGroup;
   let mujocoSceneGroup;
@@ -84,6 +90,7 @@
   let moveStartAngles = {};
   let moveStart = 0;
   let moveDuration = 900;
+  let moveEasing = 'cubic';
   let gripperMotion = null;
   let dragMode = false;
   let draggingTcp = false;
@@ -958,6 +965,7 @@
     targetAngles = { ...nextAngles };
     moveStart = performance.now();
     moveDuration = Math.max(duration || 850, 1);
+    moveEasing = options && options.easing === 'min-jerk' ? 'min-jerk' : 'cubic';
     updateGhostTarget(nextAngles);
     setGhostDisplay(true);
     if (options && options.emitBatch) {
@@ -970,7 +978,9 @@
   function updateMotion(now) {
     if (!moveStart) return;
     const t = clamp((now - moveStart) / moveDuration, 0, 1);
-    const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    const eased = moveEasing === 'min-jerk'
+      ? t * t * t * (10 - 15 * t + 6 * t * t)
+      : t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     jointDefs.forEach((joint) => {
       const start = moveStartAngles[joint.name] ?? currentAngles[joint.name];
       const end = targetAngles[joint.name] ?? start;
@@ -2169,19 +2179,38 @@
       if (!current) return null;
       const error = new THREE.Vector3().subVectors(target, current);
       const errorNorm = error.length();
-      if (errorNorm < 0.0015) return { error: errorNorm, reached: true };
+      const tolerance = Number.isFinite(options?.positionTolerance) ? options.positionTolerance : .0015;
+      if (errorNorm < tolerance) {
+        const braking = options?.velocities && Object.values(options.velocities).some((value) => Math.abs(value) > options.maxJointAcceleration * dt);
+        if (!braking) {
+          if (options?.velocities) Object.keys(options.velocities).forEach((name) => { options.velocities[name] = 0; });
+          return { error: errorNorm, reached: true };
+        }
+      }
 
-      const stepError = error.multiplyScalar(Math.min(0.65, Math.max(0.08, this.gain * dt)));
-      const jacobian = this.computeJacobian(currentAngles);
-      const delta = this.solveDampedLeastSquares(jacobian, stepError);
+      const gain = Number.isFinite(options?.gain) ? options.gain : this.gain;
+      const minBlend = Number.isFinite(options?.gain) ? .01 : .08;
+      const stepError = error.multiplyScalar(Math.min(0.65, Math.max(minBlend, gain * dt)));
+      const jacobian = options?.jacobian || this.computeJacobian(currentAngles);
+      const delta = options?.boundedJoints
+        ? this.solveBoundedStep(jacobian, stepError, dt, options)
+        : this.solveDampedLeastSquares(jacobian, stepError);
       if (!delta) return { error: errorNorm, reached: false };
 
       this.jointNames.forEach((name, index) => {
         const def = jointDefs.find((joint) => joint.name === name);
-        const limitedDelta = clamp(delta[index] || 0, -this.maxJointSpeed * dt, this.maxJointSpeed * dt);
+        const speed = Number.isFinite(options?.maxJointSpeed) ? options.maxJointSpeed : this.maxJointSpeed;
+        let velocity = clamp((delta[index] || 0) / dt, -speed, speed);
+        if (options?.velocities && Number.isFinite(options.maxJointAcceleration)) {
+          const previous = options.velocities[name] || 0;
+          velocity = clamp(velocity, previous - options.maxJointAcceleration * dt, previous + options.maxJointAcceleration * dt);
+        }
+        const limits = options?.jointLimits?.[name] || [def.min, def.max];
+        const next = clamp((currentAngles[name] || 0) + velocity * dt, limits[0], limits[1]);
+        if (options?.velocities) options.velocities[name] = (next - (currentAngles[name] || 0)) / dt;
         setJoint(
           name,
-          clamp((currentAngles[name] || 0) + limitedDelta, def.min, def.max),
+          next,
           false,
           {
             source: options && options.source ? options.source : 'drag',
@@ -2194,7 +2223,7 @@
       robot.updateMatrixWorld(true);
       const after = getTcpPosition(robot);
       const afterError = after ? after.distanceTo(target) : errorNorm;
-      return { error: afterError, reached: afterError < 0.0015 };
+      return { error: afterError, reached: afterError < tolerance };
     },
 
     computeJacobian(baseAngles) {
@@ -2218,6 +2247,45 @@
 
       applyRobotAngles(robot, saved);
       return rows;
+    },
+
+    solveBoundedStep(j, error, dt, options) {
+      const acceleration = options.maxJointAcceleration;
+      const bounds = this.jointNames.map(name => {
+        const value = currentAngles[name] || 0;
+        const limits = options.jointLimits[name];
+        const previous = options.velocities[name] || 0;
+        // Leave enough distance to brake before the hard joint stop. The
+        // bounded solve redistributes the residual across still-free joints.
+        const brakingSpeed = distance => Math.sqrt((acceleration * dt) ** 2 + 2 * acceleration * Math.max(0, distance)) - acceleration * dt;
+        const lowerSpeed = Math.max(-options.maxJointSpeed, previous - acceleration * dt, -brakingSpeed(value - limits[0]));
+        const upperSpeed = Math.min(options.maxJointSpeed, previous + acceleration * dt, brakingSpeed(limits[1] - value));
+        return [clamp(lowerSpeed * dt, limits[0] - value, limits[1] - value),
+          clamp(upperSpeed * dt, limits[0] - value, limits[1] - value)];
+      });
+      const fixed = new Map();
+      for (let pass = 0; pass <= this.jointNames.length; pass++) {
+        const residual = error.clone();
+        fixed.forEach((value, index) => {
+          residual.x -= j[0][index] * value;
+          residual.y -= j[1][index] * value;
+          residual.z -= j[2][index] * value;
+        });
+        const free = j.map(row => row.map((value, index) => fixed.has(index) ? 0 : value));
+        const delta = this.solveDampedLeastSquares(free, residual);
+        if (!delta) return null;
+        fixed.forEach((value, index) => { delta[index] = value; });
+        let blocked = -1, largest = 0;
+        delta.forEach((value, index) => {
+          if (fixed.has(index)) return;
+          const [lower, upper] = bounds[index];
+          const violation = Math.abs(value - clamp(value, lower, upper)) / Math.max(upper - lower, 1e-8);
+          if (violation > largest + 1e-9) { largest = violation; blocked = index; }
+        });
+        if (blocked < 0) return delta;
+        fixed.set(blocked, clamp(delta[blocked], bounds[blocked][0], bounds[blocked][1]));
+      }
+      return null;
     },
 
     solveDampedLeastSquares(j, error) {
@@ -2506,6 +2574,7 @@
     requestAnimationFrame(animate);
     const frameNow = now || performance.now();
     updateMotion(frameNow);
+    updateWebFollowTransition();
     updateGripperMotion(frameNow);
     updatePath(frameNow);
     updateTeachingPlayback(frameNow);
@@ -2634,7 +2703,200 @@
     if (t >= 1) gripperMotion = null;
   }
 
+  function prepareWebFollow() {
+    if (!robot) return false;
+    if (webFollow) return true;
+    stopActiveMotion();
+    webFollow = { phase: 'standby', origin: null, center: null, input: null, commandTarget: null, velocities: {} };
+    jointDefs.forEach((joint) => setJoint(joint.name, joint.home, false, { source: 'web-follow', emit: false }));
+    syncGhostToRobot();
+    return true;
+  }
+
+  function moveWebFollowPose(phase, angles) {
+    if (!prepareWebFollow()) return false;
+    stopActiveMotion();
+    webFollow.phase = phase;
+    webFollow.input = null;
+    webFollow.velocities = {};
+    const delta = Math.max(...IKSolver.jointNames.map((name) => Math.abs((angles[name] || 0) - currentAngles[name])));
+    // Quintic interpolation bounds both the peak speed and acceleration.
+    const gripperDuration = 1.875 * Math.abs((angles.gripper || 0) - currentAngles.gripper) / WEB_FOLLOW_LIMITS.gripperSpeed * 1000;
+    const duration = Math.max(1200, gripperDuration, 1.875 * delta / WEB_FOLLOW_LIMITS.jointSpeed * 1000,
+      Math.sqrt(5.774 * delta / WEB_FOLLOW_LIMITS.jointAcceleration) * 1000);
+    moveToAngles(angles, duration, { source: 'web-follow', easing: 'min-jerk', emitBatch: false });
+    setGhostDisplay(false);
+    return true;
+  }
+
+  function updateWebFollowTransition() {
+    if (!webFollow || moveStart) return;
+    if (webFollow.phase === 'waking') {
+      robot.updateMatrixWorld(true);
+      webFollow.phase = 'active';
+      webFollow.center = getTcpPosition(robot);
+      webFollow.origin = webFollow.center.clone();
+      webFollow.commandTarget = webFollow.center.clone();
+      webFollow.right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+      webFollow.up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+    } else if (webFollow.phase === 'returning') {
+      webFollow.phase = 'standby';
+      webFollow.input = webFollow.center = webFollow.origin = webFollow.commandTarget = null;
+      webFollow.velocities = {};
+    }
+  }
+
+  function limitWebFollowPoint(point) {
+    const offset = point.clone().sub(webFollow.center);
+    if (offset.length() > WEB_FOLLOW_LIMITS.radius) offset.setLength(WEB_FOLLOW_LIMITS.radius);
+    const bounded = webFollow.center.clone().add(offset);
+    bounded.y = clamp(bounded.y, WEB_FOLLOW_LIMITS.minHeight, WEB_FOLLOW_LIMITS.maxHeight);
+    const planar = Math.hypot(bounded.x, bounded.z);
+    if (planar > WEB_FOLLOW_LIMITS.maxPlanarReach) {
+      bounded.x *= WEB_FOLLOW_LIMITS.maxPlanarReach / planar;
+      bounded.z *= WEB_FOLLOW_LIMITS.maxPlanarReach / planar;
+    }
+    return bounded;
+  }
+
+  function servoWebFollowGoal(goal, dt, gripperWidth, depthOnly = false) {
+    const bounded = limitWebFollowPoint(goal);
+    let clamped = bounded.distanceTo(goal) > 1e-6;
+    const step = bounded.clone().sub(webFollow.commandTarget);
+    let depthJacobian;
+    if (depthOnly) {
+      webFollow.commandTarget.y = bounded.y;
+      webFollow.commandTarget.z = bounded.z;
+      // Reserve joint capacity for correction: Cartesian acceleration that
+      // is easy at one posture can distort the path at another posture.
+      depthJacobian = IKSolver.computeJacobian(currentAngles);
+      const tangent = IKSolver.solveDampedLeastSquares(depthJacobian, new THREE.Vector3(1, 0, 0));
+      const ratio = Math.max(1, ...(tangent || []).map(value => Math.abs(value)));
+      const acceleration = Math.min(.4, .65 * WEB_FOLLOW_LIMITS.jointAcceleration / ratio);
+      const speed = Math.min(.12, .7 * WEB_FOLLOW_LIMITS.jointSpeed / ratio);
+      const current = getTcpPosition(robot);
+      const axisError = Math.hypot(current.y - webFollow.origin.y, current.z - webFollow.origin.z);
+      if (axisError >= .0015) webFollow.correctingDepthAxis = true;
+      else if (axisError <= .00075) webFollow.correctingDepthAxis = false;
+      const desired = Math.sign(step.x) * Math.min(speed, Math.sqrt(2 * acceleration * Math.abs(step.x)));
+      webFollow.depthVelocity = clamp(desired, (webFollow.depthVelocity || 0) - acceleration * dt,
+        (webFollow.depthVelocity || 0) + acceleration * dt);
+      const dx = webFollow.depthVelocity * dt;
+      if (webFollow.correctingDepthAxis) {
+        // Recover the locked height/lateral coordinates before the hard
+        // 3 mm guard. Otherwise a rejected step can strand every later step.
+        webFollow.commandTarget.x = current.x;
+        webFollow.depthVelocity = 0;
+      } else if (Math.sign(dx) === Math.sign(step.x) && Math.abs(dx) > Math.abs(step.x)) {
+        webFollow.commandTarget.x = bounded.x;
+        webFollow.depthVelocity = 0;
+      } else webFollow.commandTarget.x += dx;
+    } else {
+      if (step.length() > WEB_FOLLOW_LIMITS.tcpSpeed * dt) step.setLength(WEB_FOLLOW_LIMITS.tcpSpeed * dt);
+      webFollow.commandTarget.add(step);
+    }
+    const saved = { ...currentAngles };
+    const result = IKSolver.servoStep(webFollow.commandTarget, dt, {
+      source: 'web-follow', emit: false, maxJointSpeed: WEB_FOLLOW_LIMITS.jointSpeed,
+      maxJointAcceleration: WEB_FOLLOW_LIMITS.jointAcceleration, velocities: webFollow.velocities,
+      gain: depthOnly ? 10 : IKSolver.gain,
+      positionTolerance: depthOnly ? .0005 : .0015,
+      jacobian: depthJacobian,
+      boundedJoints: depthOnly,
+      jointLimits: WEB_FOLLOW_JOINT_LIMITS
+    });
+    const actual = getTcpPosition(robot);
+    const offDepthAxis = depthOnly && Math.hypot(actual.y - webFollow.origin.y, actual.z - webFollow.origin.z) > .003;
+    if (actual.distanceTo(limitWebFollowPoint(actual)) > 0.0001 || offDepthAxis) {
+      IKSolver.jointNames.forEach((name) => setJoint(name, saved[name], false, { source: 'web-follow', emit: false }));
+      webFollow.velocities = {};
+      webFollow.depthVelocity = 0;
+      webFollow.correctingDepthAxis = false;
+      webFollow.commandTarget = getTcpPosition(robot);
+      clamped = true;
+    }
+    if (Number.isFinite(gripperWidth)) {
+      const step = WEB_FOLLOW_LIMITS.gripperSpeed * dt;
+      setJoint('gripper', clamp(gripperWidth, currentAngles.gripper - step, currentAngles.gripper + step),
+        false, { source: 'web-follow', emit: false });
+    }
+    syncGhostToRobot();
+    return result ? { ...result, clamped, tcp: threeToRos(getTcpPosition(robot)) } : null;
+  }
+
   window.reBotSim = {
+    isReady() {
+      return Boolean(robot && els.status.classList.contains('ready'));
+    },
+    prepareWebFollow,
+    beginWebFollow() {
+      if (!prepareWebFollow() || webFollow.phase !== 'standby') return false;
+      return moveWebFollowPose('waking', { joint1: 0, joint2: 0.45, joint3: 0.65, joint4: 0,
+        joint5: 0, joint6: 0, gripper: 0.035 });
+    },
+    getWebFollowState() {
+      return { phase: webFollow?.phase || 'standby', limits: { ...WEB_FOLLOW_LIMITS },
+        jointLimits: Object.fromEntries(Object.entries(WEB_FOLLOW_JOINT_LIMITS).map(([name, bounds]) => [name, [...bounds]])),
+        center: webFollow?.center ? threeToRos(webFollow.center) : null,
+        origin: webFollow?.origin ? threeToRos(webFollow.origin) : null,
+        tcp: robot ? threeToRos(getTcpPosition(robot)) : null };
+    },
+    recenterWebFollow() {
+      if (!webFollow || webFollow.phase !== 'active') return;
+      webFollow.origin = getTcpPosition(robot);
+      webFollow.input = null;
+      webFollow.commandTarget = webFollow.origin.clone();
+      webFollow.velocities = {};
+      webFollow.depthVelocity = 0;
+      webFollow.correctingDepthAxis = false;
+    },
+    holdWebFollow() {
+      if (!webFollow || webFollow.phase !== 'active') return;
+      webFollow.commandTarget = getTcpPosition(robot);
+      webFollow.velocities = {};
+      webFollow.depthVelocity = 0;
+    },
+    rebaseWebDepth() {
+      if (!webFollow || webFollow.phase !== 'active' || !webFollow.origin) return false;
+      const current = getTcpPosition(robot);
+      // Pair a reacquired hand distance with the held X position. Keep the
+      // original height, lateral axis and global safety center across losses.
+      webFollow.origin.x = current.x;
+      webFollow.input = null;
+      webFollow.commandTarget = current.clone();
+      webFollow.velocities = {};
+      webFollow.depthVelocity = 0;
+      return true;
+    },
+    followWebTarget(input, dt, scale, gripperWidth) {
+      if (!webFollow || webFollow.phase !== 'active' || !input || ![input.x, input.y, dt, scale].every(Number.isFinite)
+        || input.x < 0 || input.x > 1 || input.y < 0 || input.y > 1 || dt <= 0) return null;
+      dt = clamp(dt, 0.001, 0.04);
+      scale = clamp(scale, 0.15, 0.60);
+      if (!webFollow.input) webFollow.input = { x: input.x, y: input.y };
+      const goal = webFollow.origin.clone()
+        .addScaledVector(webFollow.right, (input.x - webFollow.input.x) * scale)
+        .addScaledVector(webFollow.up, (webFollow.input.y - input.y) * scale);
+      return servoWebFollowGoal(goal, dt, gripperWidth);
+    },
+    followWebDepth(offset, dt) {
+      if (!webFollow || webFollow.phase !== 'active' || ![offset, dt].every(Number.isFinite) || dt <= 0) return null;
+      // Current desktop demo: physical camera stays on the desk. Robot base
+      // +X is forward; do not mistake virtual joints for a real camera pose.
+      const goal = webFollow.origin.clone().add(new THREE.Vector3(clamp(offset, -.12, .12), 0, 0));
+      const lateralSquared = (goal.y - webFollow.center.y) ** 2 + (goal.z - webFollow.center.z) ** 2;
+      const extent = Math.sqrt(Math.max(0, WEB_FOLLOW_LIMITS.radius ** 2 - lateralSquared));
+      const planarExtent = Math.sqrt(Math.max(0, WEB_FOLLOW_LIMITS.maxPlanarReach ** 2 - goal.z ** 2));
+      const rawX = goal.x;
+      goal.x = clamp(goal.x, Math.max(webFollow.center.x - extent, -planarExtent), Math.min(webFollow.center.x + extent, planarExtent));
+      const result = servoWebFollowGoal(goal, clamp(dt, .001, .04), undefined, true);
+      if (result && Math.abs(goal.x - rawX) > 1e-6) result.clamped = true;
+      return result;
+    },
+    endWebFollow() {
+      if (!webFollow || webFollow.phase === 'standby' || webFollow.phase === 'returning') return false;
+      return moveWebFollowPose('returning', Object.fromEntries(jointDefs.map((joint) => [joint.name, joint.home])));
+    },
     getAngles() {
       return { ...currentAngles };
     },
@@ -2661,6 +2923,7 @@
     setAngles(angles, options) {
       if (!angles || typeof angles !== 'object') return;
       const source = options && options.source ? options.source : 'api';
+      if (webFollow && (source === 'ros' || source === 'trajectory-playback')) return;
       const forceFeedback = Boolean(options && options.forceFeedback);
       if (
         source === 'ros' &&
@@ -2696,6 +2959,7 @@
     },
     setGripperWidth(widthM, options) {
       const source = options && options.source ? options.source : 'api';
+      if (webFollow && source === 'ros') return;
       const forceFeedback = Boolean(options && options.forceFeedback);
       if (
         source === 'ros' &&

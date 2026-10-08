@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 5173",
     "smoke": "node scripts/smoke-load.mjs",
+    "test:hand": "node --test scripts/hand-joint-mapping.test.mjs",
     "test:explode": "node scripts/test-explosion-layout.mjs && node scripts/test-explosion-timeline.mjs"
   },
   "dependencies": {

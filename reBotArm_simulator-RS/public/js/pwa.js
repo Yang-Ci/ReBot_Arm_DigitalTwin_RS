@@ -1,4 +1,5 @@
 (function () {
+  if (new URLSearchParams(location.search).get('embed') === 'mujoco') return;
   const installButton = document.getElementById('pwa-install');
   const installStatus = document.getElementById('pwa-install-status');
   let deferredPrompt = null;

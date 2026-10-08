@@ -1,0 +1,20 @@
+:root { font-family: "Microsoft YaHei", system-ui, sans-serif; color: #e8f1f4; background: #10191e; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+.hand-app { display: grid; grid-template-columns: minmax(0, 1fr) 370px; height: 100dvh; }
+.simulation { position: relative; overflow: hidden; min-height: 440px; }
+#viewport { position: absolute; inset: 0; }
+.hand-header { position: absolute; z-index: 2; top: 20px; left: 24px; right: 24px; display: flex; justify-content: space-between; align-items: center; gap: 16px; pointer-events: none; }
+.hand-header p { margin: 0 0 6px; color: #64e3ca; font-size: 11px; letter-spacing: .14em; }
+.hand-header h1 { margin: 0; font-size: 24px; text-shadow: 0 2px 12px #000; }
+.hand-header a { color: #c8dbe6; font-size: 12px; text-decoration: none; pointer-events: auto; padding: 10px 12px; border: 1px solid #ffffff25; border-radius: 8px; background: #152332bb; }
+.hand-loading { position: absolute; z-index: 3; inset: 0; display: grid; place-items: center; text-align: center; padding: 30px; background: #111c25e8; line-height: 1.8; }
+.hand-loading[hidden] { display: none; }
+.simulation-status { position: absolute; z-index: 2; left: 24px; right: 24px; bottom: 20px; display: flex; justify-content: space-between; gap: 12px; padding: 12px 16px; border: 1px solid #ffffff25; border-radius: 10px; background: #0c192de0; font-size: 12px; }
+.simulation-status strong { color: #64e3ca; font-weight: 500; }
+.simulation-status span { color: #a7bfd0; font-variant-numeric: tabular-nums; }
+.hand-controls { display: flex; flex-direction: column; border-left: 1px solid #ffffff18; background: #171b19; overflow: hidden; }
+.controls-heading { padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ffffff18; }
+.controls-heading span { font-size: 11px; color: #64e3ca; }
+#hand-controller { flex: 1; width: 100%; min-height: 0; border: 0; }
+@media (max-width: 800px) { .hand-app { display: flex; flex-direction: column; height: auto; } .simulation { height: 60dvh; min-height: 380px; } .hand-controls { height: 900px; border-left: 0; } .hand-header { left: 16px; right: 16px; } .hand-header h1 { font-size: 20px; } .simulation-status { left: 16px; right: 16px; flex-wrap: wrap; } }

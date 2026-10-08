@@ -29,6 +29,7 @@ const USE_HTTPS = process.env.HTTPS === '1';
 const PORT = Number(process.env.PORT || (USE_HTTPS ? 3444 : 3002));
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
+const handleHandDepth = require('./scripts/hand-depth-service')(ROOT);
 const BRINGUP_DIR = path.resolve(
   path.join(ROOT, '..', 'rebotarm_ros2_RS', 'src', 'rebotarm_bringup')
 );
@@ -58,6 +59,9 @@ const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
+  '.wasm': 'application/wasm',
+  '.task': 'application/octet-stream',
   '.json': 'application/json; charset=utf-8',
   '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.png': 'image/png',
@@ -123,6 +127,10 @@ function getLanAddresses() {
 
 function requestHandler(req, res) {
   const urlPath = req.url.split('?')[0];
+  if (urlPath.startsWith('/api/hand-depth/')) {
+    handleHandDepth(req, res);
+    return;
+  }
 
   // MCP 配置端点
   if (urlPath === '/api/mcp/config') {

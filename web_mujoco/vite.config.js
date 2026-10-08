@@ -4,6 +4,7 @@ import { gzipSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
+import { handFollowSource } from './scripts/hand-follow-source.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const modelsSrc = path.resolve(
@@ -65,10 +66,12 @@ export default defineConfig({
   },
   assetsInclude: ['**/*.wasm'],
   build: {
+    rollupOptions: { input: { main: path.resolve(root, 'index.html'), hand: path.resolve(root, 'hand-follow.html') } },
     assetsInlineLimit: 0,
     chunkSizeWarningLimit: 4000
   },
   plugins: [
+    handFollowSource(root),
     {
       name: 'copy-rs-models',
       closeBundle() {
@@ -140,6 +143,10 @@ export default defineConfig({
     }
   ],
   server: {
+    proxy: {
+      '/hand-source': { target: 'http://localhost:3002', changeOrigin: false, rewrite: url => url.replace(/^\/hand-source/, '') || '/' },
+      '/api': { target: 'http://localhost:3002', changeOrigin: false }
+    },
     port: 5173,
     strictPort: false,
     headers: {

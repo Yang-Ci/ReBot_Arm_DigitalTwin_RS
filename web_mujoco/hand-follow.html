@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#10191e" />
+  <title>ReBot Arm · MuJoCo 手势跟随</title>
+</head>
+<body>
+  <main class="hand-app">
+    <section class="simulation">
+      <header class="hand-header">
+        <div><p>REBOT ARM / MUJOCO</p><h1>机械臂手势跟随</h1></div>
+        <a href="./">完整仿真控制台 ↗</a>
+      </header>
+      <div id="viewport" aria-label="MuJoCo 机械臂物理仿真"></div>
+      <div class="hand-loading" id="hand-loading" role="status">正在加载 MuJoCo 和机械臂模型…</div>
+      <footer class="simulation-status">
+        <strong id="mapping-status" role="status">等待模型加载</strong>
+        <span id="tracking-error">关节跟随误差 —</span>
+      </footer>
+    </section>
+    <aside class="hand-controls">
+      <div class="controls-heading"><strong>手势控制</strong><span>336 RGB-D</span></div>
+      <iframe id="hand-controller" title="手势相机、唤醒及安全边界控制" allow="camera" src="about:blank"></iframe>
+    </aside>
+  </main>
+  <script type="module" src="/src/hand-follow-main.js"></script>
+</body>
+</html>

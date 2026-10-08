@@ -1,0 +1,29 @@
+.hand-follow-section select { max-width: 220px; min-width: 0; }
+.hand-follow-intro, .hand-follow-tip, .hand-follow-message { font-size: 12px; line-height: 1.7; }
+.hand-follow-intro, .hand-follow-tip { color: var(--muted); }
+.hand-follow-message { color: var(--teal); min-height: 40px; margin: 10px 0; overflow-wrap: anywhere; }
+.hand-preview { position: relative; overflow: hidden; width: 100%; aspect-ratio: 4 / 3; margin: 14px 0; border: 1px solid var(--line); border-radius: 10px; background: radial-gradient(ellipse at center, #253c34, #141c19); touch-action: none; }
+.hand-preview video, .hand-preview canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transform: scaleX(-1); }
+.hand-preview [hidden] { display: none; }
+.hand-preview-empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: var(--muted); font-size: 12px; }
+.hand-preview-icon { font-size: 42px; }
+.hand-preview-mode { position: absolute; top: 10px; left: 10px; font-size: 10px; color: var(--teal); background: #111c; padding: 5px 8px; border-radius: 5px; pointer-events: none; }
+.hand-pointer { position: absolute; width: 20px; height: 20px; margin: -10px; border: 2px solid var(--teal); border-radius: 50%; box-shadow: 0 0 22px #33d6b080; pointer-events: none; }
+.hand-gain-row { gap: 10px; }
+.hand-gain-row input { flex: 1; min-width: 50px; }
+.hand-gain-row output { color: var(--teal); width: 38px; font-size: 12px; }
+.hand-view-link { color: var(--muted); text-decoration: none; font-size: 12px; }
+.hand-view-link:hover { color: var(--teal); }
+.hand-follow-section .mini-pill[data-active="true"] { color: var(--teal); border-color: var(--teal); }
+.hand-follow-page .control-mode-tabs, .hand-follow-page .control-mode-panel, .hand-follow-page #pwa-install-status, .hand-follow-page #ros-help-top, .hand-follow-page #lang-toggle, .hand-follow-page .legend-hud, .hand-follow-page .drag-hud, .hand-follow-page .hand-view-link { display: none; }
+.hand-follow-page .hand-follow-section { border-top: none; }
+.hand-follow-page .pose-hud { bottom: 22px; }
+.hand-safety-state { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0 6px; font-size: 12px; }
+.hand-safety-state strong { color: var(--teal); }
+.hand-safety-state span { color: var(--muted); font-variant-numeric: tabular-nums; }
+#hand-wake-progress { display: block; width: 100%; height: 5px; border: 0; border-radius: 4px; accent-color: var(--teal); }
+.hand-follow-section button[hidden] { display: none; }
+.hand-follow-embedded .app-shell { display: block; height: auto; min-height: 100vh; }
+.hand-follow-embedded #viewport { position: absolute; left: -10px; top: -10px; width: 1px; height: 1px; min-height: 0; overflow: hidden; opacity: 0; pointer-events: none; }
+.hand-follow-embedded .control-panel { width: 100%; max-width: none; height: auto; min-height: 100vh; border: 0; }
+.hand-follow-embedded .panel-title, .hand-follow-embedded .hand-view-link { display: none; }

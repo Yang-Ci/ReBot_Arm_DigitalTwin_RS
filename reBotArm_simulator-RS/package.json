@@ -4,9 +4,17 @@
   "description": "reBot Arm B601-RS standalone web simulator",
   "main": "server.js",
   "scripts": {
+    "prepare:hand": "node scripts/prepare-hand-assets.js",
+    "prepare:depth": "node scripts/prepare-depth.js",
+    "test:hand": "node --test scripts/hand-follow-policy.test.js scripts/hand-depth.test.js",
+    "prestart": "npm run prepare:hand",
+    "predev": "npm run prepare:hand",
     "start": "node server.js",
     "dev": "node server.js",
     "start:https": "powershell -ExecutionPolicy Bypass -Command \"$env:HTTPS='1'; $env:PORT='3444'; node server.js\"",
     "cert:dev": "pwsh -ExecutionPolicy Bypass -File scripts/create-dev-cert.ps1"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "1.0.1"
   }
 }

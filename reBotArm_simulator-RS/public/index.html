@@ -13,6 +13,7 @@
   <link rel="apple-touch-icon" href="./favicon.png">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="stylesheet" href="./css/rebot-sim.css?v=20260813-rs-guide43">
+  <link rel="stylesheet" href="./css/hand-follow.css?v=20261005-hand10">
   <link rel="stylesheet" href="./css/leader-teleop.css?v=20261007-leader02">
 </head>
 <body>
@@ -73,6 +74,43 @@
       </div>
 
       <div class="install-status" id="pwa-install-status" data-i18n="pwa.detecting">正在检测安装状态</div>
+
+      <section class="section hand-follow-section" aria-labelledby="hand-follow-title">
+        <div class="section-head">
+          <div><p class="eyebrow">HAND FOLLOW</p><h3 id="hand-follow-title">手势跟随</h3></div>
+          <span class="mini-pill" id="hand-follow-status" role="status">未开启</span>
+        </div>
+        <p class="hand-follow-intro">张开手掌保持 1 秒唤醒。移动手掌、捏合控制夹爪；336 深度模式下握拳前后跟随，张开手掌退出。</p>
+        <div class="hand-safety-state"><strong id="hand-interaction-state">零点待机</strong><span id="hand-idle-countdown">待唤醒</span></div>
+        <progress id="hand-wake-progress" max="1" value="0" aria-label="手掌唤醒保持进度"></progress>
+        <label class="field-row">
+          <span>相机</span>
+          <select id="hand-camera"><option value="depth-336" selected>336 RGB-D（握拳前后跟随）</option><option value="">默认 RGB 相机</option></select>
+        </label>
+        <div class="hand-preview" id="hand-preview" tabindex="0" aria-label="相机预览或鼠标跟随区域">
+          <video id="hand-video" autoplay muted playsinline hidden></video>
+          <canvas id="hand-depth-preview" width="640" height="480" hidden></canvas>
+          <canvas id="hand-overlay" width="640" height="480" hidden></canvas>
+          <div class="hand-preview-empty" id="hand-preview-empty"><span class="hand-preview-icon">✋</span><span>开启相机，把手放进画面</span></div>
+          <div class="hand-pointer" id="hand-pointer" hidden></div>
+          <span class="hand-preview-mode" id="hand-preview-mode" hidden></span>
+        </div>
+        <div class="button-grid">
+          <button type="button" class="primary-btn" id="hand-start" disabled>开启相机跟随</button>
+          <button type="button" id="hand-stop" disabled>关闭相机并归零</button>
+        </div>
+        <div class="button-grid"><button type="button" id="hand-wake" hidden disabled>鼠标唤醒</button><button type="button" id="hand-sleep" disabled>休眠归零</button></div>
+        <div class="button-grid">
+          <button type="button" id="hand-mouse" disabled>鼠标试跟随</button>
+          <button type="button" id="hand-recenter" disabled>重新定位</button>
+        </div>
+        <label class="field-row hand-gain-row"><span>跟随幅度</span><input id="hand-gain" type="range" min="0.15" max="0.6" step="0.05" value="0.4"><output id="hand-gain-value">1.0×</output></label>
+        <label class="switch-row"><input type="checkbox" id="hand-gripper" checked><span>捏合控制夹爪</span></label>
+        <p class="hand-follow-tip" id="hand-depth-status">336 深度待开启 · 握拳锁定前后轴 · 张开手掌退出</p>
+        <p class="hand-follow-message" id="hand-follow-message" role="status" aria-live="polite">正在加载机械臂模型…</p>
+        <p class="hand-follow-tip">丢手暂停 · 15 秒无有效手势归零 · Esc 关闭并归零<br>中位周围 16 cm 活动范围 · 限速与加速度保护</p>
+        <a class="hand-view-link" href="?view=hand-follow">打开简洁跟随页面 ↗</a>
+      </section>
 
       <div class="control-mode-tabs" role="tablist" aria-label="真机控制模式">
         <button
@@ -545,7 +583,10 @@ export REBOTARM_LLM_MODEL='qwen-plus'
   <script src="./js/pwa.js?v=20260904-rs-pages01"></script>
   <script src="./js/i18n.js?v=20260921-rs-preset-smooth02"></script>
   <script src="./js/ros/rebot-ros-client.js?v=20260921-rs-preset-smooth02"></script>
-  <script src="./js/rebot-sim.js?v=20260921-rs-preset-smooth02"></script>
+  <script src="./js/rebot-sim.js?v=20261005-hand10"></script>
+  <script src="./js/hand-follow-policy.js?v=20261005-hand10"></script>
+  <script src="./js/hand-depth.js?v=20261005-hand10"></script>
+  <script src="./js/hand-follow.js?v=20261005-hand10"></script>
   <script src="./js/control-mode.js?v=20260812-rs-ctrl32"></script>
   <script src="./js/ros/rebot-ros-ui.js?v=20261007-leader01"></script>
   <script src="./js/ros/leader-model.js?v=20261007-leader02"></script>
