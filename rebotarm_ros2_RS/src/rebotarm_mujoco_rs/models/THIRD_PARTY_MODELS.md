@@ -1,10 +1,11 @@
 # Third-party model assets
 
-## B601-RS D405 / D435i / Gemini 2 wrist assemblies
+## B601-RS UVC32 / D405 / D435i / Gemini 2 wrist assemblies
 
 The former 30-degree D405 mount and primitive camera proxy have been removed.
 The `wrist_*` mesh assets and generated sections in `rs_arm.xml` use the same
-three upstream assemblies as the RS web console:
+four assemblies as the RS web console. The original three use vendor bodies;
+UVC32 uses the official bracket CAD with a generic camera-board schematic:
 
 - Mounts and assembly positions: `xiehuangbao888/rebot_visual_grasp`, commit
   `dd28d65598deec767cf95fa45521d69b38155833` (package declares Apache-2.0).
@@ -33,3 +34,16 @@ mass or joints. Inactive variants have zero alpha and use hidden geom group 4.
 
 To regenerate, install developer dependencies `numpy`, `scipy` and `pycollada`,
 then run `python scripts/build_wrist_cameras.py` from this ROS package.
+
+## UVC32 generated assembly
+
+The bracket mesh is tessellated from Seeed-Projects/reBot-DevArm
+`hardware/camera-mounts/b601-camera-mounts/UVC32_mount.step`, CERN-OHL-W-2.0.
+The camera-board mounting plane and 28×28 mm hole spacing are extracted from
+CAD; the common clamp interface is aligned using the official D435 reference
+CAD and the existing wrist attachment. The generated 32×32×1.6 mm board, lens
+and glass are simulation schematics, not a vendor device model. Its nominal
+optical origin and shared FOV are not a physical-device calibration.
+
+Original STEP files, generated mesh hashes and the CAD generation script are
+retained with the canonical wrist camera assets.

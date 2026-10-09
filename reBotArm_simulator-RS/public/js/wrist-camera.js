@@ -1,5 +1,5 @@
 (function () {
-  const MODELS = Object.freeze({ none: '', d405: 'D405', d435i: 'D435i', gemini2: 'Gemini 2' });
+  const MODELS = Object.freeze({ none: '', d405: 'D405', d435i: 'D435i', gemini2: 'Gemini 2', uvc32: '32×32 UVC' });
   const STORAGE_KEY = 'rebotarm.rs.wristCamera';
 
   // Geometry is shared by the solid assembly and its ghost. Dispose each

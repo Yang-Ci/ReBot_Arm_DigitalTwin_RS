@@ -287,7 +287,7 @@ class RsMujocoSync(Node):
         name = selected[-1]
         if name not in CAMERA_MODELS:
             return SetParametersResult(successful=False,
-                                       reason="Choose d405, d435i or gemini2")
+                                       reason="Choose d405, d435i, gemini2 or uvc32")
         viewer_lock = self.viewer.lock() if self.viewer is not None else nullcontext()
         with viewer_lock:
             self.wrist_cameras.select(name)

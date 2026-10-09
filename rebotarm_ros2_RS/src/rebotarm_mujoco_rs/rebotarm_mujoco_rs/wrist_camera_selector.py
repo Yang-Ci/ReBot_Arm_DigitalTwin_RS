@@ -9,7 +9,7 @@ from rclpy.parameter_client import AsyncParameterClient
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String
 
-LABELS = {"d405": "RealSense D405", "d435i": "RealSense D435i", "gemini2": "Orbbec Gemini 2"}
+LABELS = {"d405": "RealSense D405", "d435i": "RealSense D435i", "gemini2": "Orbbec Gemini 2", "uvc32": "32×32 UVC"}
 
 
 class WristCameraSelector(Node):

@@ -52,7 +52,7 @@ def write_stl(path, triangles):
 def build():
     assets, geoms, definitions = [], [], {}
     copied = {}
-    for variant in ("d405", "d435i", "gemini2"):
+    for variant in ("d405", "d435i", "gemini2", "uvc32"):
         urdf = SOURCE / "urdf" / f"{variant}.urdf"
         root = ET.parse(urdf).getroot()
         links = {link.get("name"): link for link in root.findall("link")}
@@ -115,7 +115,7 @@ def build():
         # ROS optical +Z looks forward / +Y down; MuJoCo camera -Z looks
         # forward / +Y up. Reverse Y and Z without changing the optical centre.
         optical[:3, :3] = optical[:3, :3] @ np.diag([1, -1, -1])
-        definitions[variant] = {"label": {"d405": "RealSense D405", "d435i": "RealSense D435i", "gemini2": "Orbbec Gemini 2"}[variant],
+        definitions[variant] = {"label": {"d405": "RealSense D405", "d435i": "RealSense D435i", "gemini2": "Orbbec Gemini 2", "uvc32": "32×32 UVC"}[variant],
                                 "geoms": names, "materials": materials, "camera": {**pose(optical), "fovy": 62.82}}
 
     default = definitions["d405"]["camera"]

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rebot-arm-rs-pwa-v106-wrist-cameras';
+const CACHE_NAME = 'rebot-arm-rs-pwa-v107-uvc32';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -8,7 +8,7 @@ const APP_SHELL = [
   '/js/pwa.js?v=20260812-rs-ctrl32',
   '/js/i18n.js?v=20261008-rs-camera01',
   '/js/rebot-sim.js?v=20261008-rs-camera01',
-  '/js/wrist-camera.js?v=20261008-rs-camera01',
+  '/js/wrist-camera.js?v=20261009-rs-camera02',
   '/js/ros/rebot-ros-client.js?v=20260921-rs-preset-smooth02',
   '/js/control-mode.js?v=20260812-rs-ctrl32',
   '/js/ros/rebot-ros-ui.js?v=20261007-leader01',
@@ -32,6 +32,11 @@ const APP_SHELL = [
   '/models/wrist-cameras/urdf/d405.urdf',
   '/models/wrist-cameras/urdf/d435i.urdf',
   '/models/wrist-cameras/urdf/gemini2.urdf',
+  '/models/wrist-cameras/urdf/uvc32.urdf',
+  '/models/wrist-cameras/meshes/mounts/UVC32_mount.stl',
+  '/models/wrist-cameras/meshes/uvc32/board.stl',
+  '/models/wrist-cameras/meshes/uvc32/lens.stl',
+  '/models/wrist-cameras/meshes/uvc32/glass.stl',
   '/models/wrist-cameras/meshes/gemini2/base_link.STL',
   '/models/wrist-cameras/meshes/gemini2/camera_botter_screw_frame.STL',
   '/models/wrist-cameras/meshes/gemini2/camera_color_frame.STL',

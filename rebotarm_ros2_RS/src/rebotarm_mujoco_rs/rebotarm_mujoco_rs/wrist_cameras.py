@@ -4,7 +4,7 @@ import json
 
 import mujoco
 
-CAMERA_MODELS = ("d405", "d435i", "gemini2")
+CAMERA_MODELS = ("d405", "d435i", "gemini2", "uvc32")
 
 
 class WristCameraAssemblies:
@@ -30,7 +30,7 @@ class WristCameraAssemblies:
 
     def select(self, name):
         if name not in CAMERA_MODELS:
-            raise ValueError("wrist_camera_model must be d405, d435i or gemini2")
+            raise ValueError("wrist_camera_model must be d405, d435i, gemini2 or uvc32")
         for variant in CAMERA_MODELS:
             selected = variant == name
             for geom_id in self.geoms[variant]:

@@ -115,6 +115,14 @@
     <mesh name="wrist_gemini2_camera_depth_frame" file="wrist_gemini2_camera_depth_frame.stl" scale="1 1 1" />
     <material name="wrist_gemini2_camera_depth_frame_0_0_mat" rgba="0.792156862745 0.819607843137 0.933333333333 0" specular="0.35" shininess="0.5" />
     <material name="wrist_gemini2_camera_mount_link_0_0_mat" rgba="0.7 0.73 0.75 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_mounts_UVC32_mount" file="wrist_mounts_UVC32_mount.stl" scale="0.001 0.001 0.001" />
+    <material name="wrist_uvc32_camera_mount_link_0_0_mat" rgba="0.7 0.73 0.75 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_uvc32_board" file="wrist_uvc32_board.stl" scale="0.001 0.001 0.001" />
+    <material name="wrist_uvc32_camera_link_0_0_mat" rgba="0.06 0.32 0.14 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_uvc32_lens" file="wrist_uvc32_lens.stl" scale="0.001 0.001 0.001" />
+    <material name="wrist_uvc32_camera_link_1_0_mat" rgba="0.035 0.035 0.04 0" specular="0.35" shininess="0.5" />
+    <mesh name="wrist_uvc32_glass" file="wrist_uvc32_glass.stl" scale="0.001 0.001 0.001" />
+    <material name="wrist_uvc32_camera_link_2_0_mat" rgba="0.04 0.14 0.22 0" specular="0.35" shininess="0.5" />
     <!-- END GENERATED WRIST CAMERA ASSETS -->
   </asset>
 
@@ -202,6 +210,10 @@
                     <geom name="wrist_gemini2_camera_left_ir_optical_frame_0_0" type="mesh" mesh="wrist_gemini2_camera_infra2_optical_frame" pos="-0.110040028325 0.0251270563394 0.0935295192993" quat="0.347115359838 -0.607291867062 0.620515528594 -0.354496817953" material="wrist_gemini2_camera_left_ir_optical_frame_0_0_mat" group="4" contype="0" conaffinity="0" mass="0" />
                     <geom name="wrist_gemini2_camera_depth_frame_0_0" type="mesh" mesh="wrist_gemini2_camera_depth_frame" pos="-0.110040028325 0.0251270563394 0.0935295192993" quat="0.964709786723 0.00292110170787 0.263097608933 -0.0103025598233" material="wrist_gemini2_camera_depth_frame_0_0_mat" group="4" contype="0" conaffinity="0" mass="0" />
                     <geom name="wrist_gemini2_camera_mount_link_0_0" type="mesh" mesh="wrist_mounts_D435_Gemini2_Mount" pos="-0.1201 0.0003 0.045" quat="0.502384668195 0.507205266179 0.498692788059 0.491587190903" material="wrist_gemini2_camera_mount_link_0_0_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_uvc32_camera_mount_link_0_0" type="mesh" mesh="wrist_mounts_UVC32_mount" pos="-0.0940591902018 -0.000253569288831 0.0299718222073" quat="0.502384668195 0.507205266179 0.498692788059 0.491587190903" material="wrist_uvc32_camera_mount_link_0_0_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_uvc32_camera_link_0_0" type="mesh" mesh="wrist_uvc32_board" pos="-0.120558252971 0.000440256751845 0.105362729507" quat="0.321804752021 -0.621927780935 0.633256609173 -0.329596122271" material="wrist_uvc32_camera_link_0_0_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_uvc32_camera_link_1_0" type="mesh" mesh="wrist_uvc32_lens" pos="-0.120558252971 0.000440256751845 0.105362729507" quat="0.321804752021 -0.621927780935 0.633256609173 -0.329596122271" material="wrist_uvc32_camera_link_1_0_mat" group="4" contype="0" conaffinity="0" mass="0" />
+                    <geom name="wrist_uvc32_camera_link_2_0" type="mesh" mesh="wrist_uvc32_glass" pos="-0.120558252971 0.000440256751845 0.105362729507" quat="0.321804752021 -0.621927780935 0.633256609173 -0.329596122271" material="wrist_uvc32_camera_link_2_0_mat" group="4" contype="0" conaffinity="0" mass="0" />
                     <camera name="wrist_rgb" pos="-0.108727455312 0.00907532251669 0.107614316844" quat="-0.611836406866 -0.348746267763 0.349674379214 0.617867364792" fovy="62.82" />
                     <!-- END GENERATED WRIST CAMERA GEOMS -->
                     <geom name="gripper_palm_collision" pos="0 0 0" rgba="0 0 0 0" group="3"

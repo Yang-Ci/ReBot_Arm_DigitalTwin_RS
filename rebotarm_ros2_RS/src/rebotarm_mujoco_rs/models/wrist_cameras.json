@@ -125,5 +125,34 @@
       ],
       "fovy": 62.82
     }
+  },
+  "uvc32": {
+    "label": "32\u00d732 UVC",
+    "geoms": [
+      "wrist_uvc32_camera_mount_link_0_0",
+      "wrist_uvc32_camera_link_0_0",
+      "wrist_uvc32_camera_link_1_0",
+      "wrist_uvc32_camera_link_2_0"
+    ],
+    "materials": [
+      "wrist_uvc32_camera_mount_link_0_0_mat",
+      "wrist_uvc32_camera_link_0_0_mat",
+      "wrist_uvc32_camera_link_1_0_mat",
+      "wrist_uvc32_camera_link_2_0_mat"
+    ],
+    "camera": {
+      "pos": [
+        -0.11246460754498316,
+        0.00027038052400127615,
+        0.09966412917124368
+      ],
+      "quat": [
+        -0.6219277809352175,
+        -0.32180475202125736,
+        0.3295961222707763,
+        0.6332566091732488
+      ],
+      "fovy": 62.82
+    }
   }
 }

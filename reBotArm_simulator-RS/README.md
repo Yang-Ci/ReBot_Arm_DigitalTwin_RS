@@ -9,7 +9,7 @@ URDF/STL；目录内的 `description` 只作为网页被单独复制时的离线
 | 能力 | 状态 |
 | --- | --- |
 | RS Three.js/URDF/STL | 可用 |
-| 可切换腕部相机 URDF | 无相机 / RealSense D405 / RealSense D435i / Orbbec Gemini 2 |
+| 可切换腕部相机 URDF | 无相机 / 32×32 UVC / RealSense D405 / RealSense D435i / Orbbec Gemini 2 |
 | RS ROS 2 Fake Driver | 可用，命名空间 `/rebotarm_rs` |
 | RS 真机 ROS 2 Controller | 可用，命名空间 `/rebotarm` |
 | 新版 `JointPosVelCmd`/`JointMitCmd` | 已适配 |
