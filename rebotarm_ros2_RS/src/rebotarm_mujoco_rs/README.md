@@ -16,7 +16,7 @@ ROS `JointState`, so the real arm continues to have a single owner: the
 `reBotArmController` node.
 
 The RS package now also includes a physics grasp environment with red, blue,
-and yellow objects, overhead and D405-style wrist ROS cameras, object detections, Cartesian IK,
+and yellow objects, overhead and switchable UVC32 / D405 / D435i / Gemini 2 wrist ROS cameras, object detections, Cartesian IK,
 trajectory actions, and task recording services used by `rebotarm_agent`.
 
 Modes:
@@ -28,6 +28,41 @@ Modes:
 ros2 launch rebotarm_mujoco_rs mujoco_rs.launch.py \
   arm_namespace:=rebotarm_rs simulation_mode:=physics use_viewer:=true
 ```
+
+## Wrist camera selection
+
+With `use_viewer:=true`, a small **MuJoCo · Wrist Camera** selection window opens
+alongside the native viewer. Select 32×32 UVC, RealSense D405, RealSense D435i or Orbbec
+Gemini 2 there, or press **C** in the MuJoCo viewer to cycle through them. The
+selection window follows keyboard changes. The old 30-degree mount and camera
+proxy have been removed; these assemblies reuse the RS console's upstream URDF
+mount, body and color optical transforms.
+
+The default is D405. Choose a different model at startup:
+
+```bash
+REBOTARM_WRIST_CAMERA_MODEL=uvc32 ./rebotarm start rs_sim
+```
+
+Direct ROS launch supports `wrist_camera_model:=d435i`. To change a running
+simulation without the selection window:
+
+```bash
+ros2 param set /rebotarm_rs_mujoco wrist_camera_model uvc32
+```
+
+Switching changes only visual camera geometry and the wrist RGB pose. It
+preserves joint positions, targets, grasp objects and simulation time. Both ROS
+image renderers receive the selected model through the transient-local
+`/rebotarm_rs/mujoco/wrist_camera_model` topic, including renderers started later.
+Wrist image and CameraInfo topic names remain stable across selections.
+
+Use `enable_camera_selector:=false` (or `REBOTARM_CAMERA_SELECTOR=false`) to
+hide the extra selection window; the ROS parameter and C key still work.
+Headless launches do not open the selector by default. The camera models are
+visual only, with no added collision, joint or mass terms. The simulation uses
+a shared 62.82° vertical field of view; device calibration is separate.
+See [model sources and regeneration](models/THIRD_PARTY_MODELS.md).
 
 Important topics:
 
@@ -42,3 +77,7 @@ Task endpoints:
 - `/rebotarm_rs/move_to_pose_ik`
 - `/rebotarm_rs/move_to_pose`
 - `/rebotarm_rs/follow_joint_trajectory`
+
+The UVC32 bracket is generated from official STEP CAD. Its 32×32 mm board
+and lens are schematic simulation geometry; the nominal optical frame and
+shared simulation FOV are not physical-device calibration.

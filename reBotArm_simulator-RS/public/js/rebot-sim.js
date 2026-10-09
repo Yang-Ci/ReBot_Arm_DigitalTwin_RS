@@ -15,9 +15,9 @@
  const URDF_HAS_BUILTIN_GRIPPER = true;
  const GRIPPER_MESH_VERSION = 'rs-v1';
   const FAKE_GRASP_LOCAL_OFFSET = new THREE.Vector3(-0.05, 0, -0.02);
-  const TABLE_CENTER_X = 0.35;
-  const TABLE_WIDTH = 0.36;
-  const TABLE_DEPTH = 0.36;
+  const TABLE_CENTER_X = 0.38;
+  const TABLE_WIDTH = 0.50;
+  const TABLE_DEPTH = 0.90;
   const TABLE_SURFACE_Y = 0.10;
   const TABLE_THICKNESS = 0.03;
   const MUJOCO_OBJECT_COLORS = Object.freeze({
@@ -72,6 +72,7 @@
   let robot;
   let robotFrame;
   let ghostRobot;
+  let wristCamera;
   let ghostDisplayActive = false;
   let hardwareFeedbackDriven = false;
   let webFollow = null;
@@ -166,6 +167,11 @@
     buildControls();
     setupScene();
     setupEvents();
+    wristCamera = new window.RebotWristCamera(
+      document.getElementById('wrist-camera-model'),
+      document.getElementById('wrist-camera-model-status'),
+      styleRobot
+    );
     updateTeachingStatus();
     loadRobot();
     animate();
@@ -455,26 +461,51 @@
   function createTaskSpace() {
     const group = new THREE.Group();
     group.name = 'mujoco-task-objects';
+
+    // Storage zones matching the MuJoCo grasp scene (red/blue/yellow bins).
+    const zones = [
+      { color: 0xeb5248, center: [0.49, -0.160, 0.1015], size: 0.08 },
+      { color: 0x459df2, center: [0.49, 0.000, 0.1015], size: 0.08 },
+      { color: 0xffd02b, center: [0.49, 0.160, 0.1015], size: 0.08 }
+    ];
+    zones.forEach((zone) => {
+      const [rosX, rosY, rosZ] = zone.center;
+      const half = zone.size / 2;
+      const x = rosX;
+      const y = rosZ;
+      const z = -rosY;
+      const points = [
+        new THREE.Vector3(x - half, y, z - half),
+        new THREE.Vector3(x + half, y, z - half),
+        new THREE.Vector3(x + half, y, z + half),
+        new THREE.Vector3(x - half, y, z + half),
+        new THREE.Vector3(x - half, y, z - half)
+      ];
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const material = new THREE.LineBasicMaterial({ color: zone.color, transparent: true, opacity: 0.86 });
+      group.add(new THREE.Line(geometry, material));
+    });
+
     const objects = [
       {
         key: 'red',
         label: 'sim.redBlock',
         color: 0xeb140f,
-        position: [0.31, -0.09, 0.1225],
+        position: [0.24, -0.30, 0.1225],
         geometry: new THREE.BoxGeometry(0.045, 0.045, 0.045)
       },
       {
         key: 'blue',
         label: 'sim.blueBlock',
         color: 0x086bf0,
-        position: [0.32, 0.08, 0.119],
+        position: [0.34, 0.06, 0.119],
         geometry: new THREE.BoxGeometry(0.052, 0.038, 0.032)
       },
       {
         key: 'yellow',
         label: 'sim.cylinder',
         color: 0xffb80a,
-        position: [0.25, 0.10, 0.126],
+        position: [0.33, -0.20, 0.126],
         geometry: new THREE.CylinderGeometry(0.020, 0.020, 0.052, 32)
       }
     ];
@@ -551,6 +582,7 @@
         }
       }
       createGhostRobot();
+      wristCamera.attach(robot, ghostRobot);
       applyPreset('ready', true);
       estimateWorkspaceEnvelope();
       rebuildEnvelope();
@@ -3010,6 +3042,7 @@
         return Number.isFinite(Number(value)) ? Number(value) : NaN;
       };
       return {
+        wristCamera: wristCamera.getDiagnostics(),
         mujocoSceneVisible: Boolean(mujocoSceneGroup && mujocoSceneGroup.visible),
         table: {
           centerX: TABLE_CENTER_X,
@@ -3047,6 +3080,12 @@
     },
     syncMujocoObjectStates(objects) {
       applyMujocoObjectStates(objects);
+    },
+    getTcpPosition() {
+      if (!robot) return null;
+      const pos = getTcpPosition(robot);
+      if (!pos) return null;
+      return threeToRos(pos);
     },
     stopMotion() {
       stopActiveMotion();

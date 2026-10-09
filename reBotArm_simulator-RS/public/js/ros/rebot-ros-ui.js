@@ -36,11 +36,16 @@
   const MAX_JOINT_VLIM_RAD_S = 1.50;
   const GRIPPER_VLIM_RAD_S = 5.0;
   const TEACH_ENDPOINT_DURATION_S = 3;
-  const VISION_TRANSIT_Z_M = 0.190;
-  const VISION_TRANSIT_Z_BY_COLOR_M = {
-    blue: 0.185,
-    yellow: 0.195
+  const STORAGE_ZONES = {
+    red: { x: 0.49, y: -0.16, z: 0.1225 },
+    blue: { x: 0.49, y: 0.00, z: 0.119 },
+    yellow: { x: 0.49, y: 0.16, z: 0.126 }
   };
+  // Waypoint clearances mirror web_mujoco/src/grasp-demo.js.
+  const WEB_MUJOCO_APPROACH_CLEARANCE_M = 0.10;
+  const WEB_MUJOCO_LIFT_CLEARANCE_M = 0.13;
+  const WEB_MUJOCO_PLACE_PRESS_DEPTH_M = 0.0005;
+  const WEB_MUJOCO_RETREAT_CLEARANCE_M = 0.11;
   const VISION_FIRST_LIFT_CLEARANCE_M = 0.040;
   const VISION_FIRST_LIFT_MIN_M = 0.180;
   const VISION_POSE_SKIP_M = 0.006;
@@ -63,9 +68,6 @@
     gravityStart: `/${NS}/gravity_compensation/start`,
     gravityStop: `/${NS}/gravity_compensation/stop`,
     gravityStatus: `/${NS}/gravity_compensation/status`,
-    gripperRelease: `/${NS}/gripper/release`,
-    gripperHold: `/${NS}/gripper/hold`,
-    gripperAssistStart: `/${NS}/gripper/assist/start`,
     gripperAssistStatus: `/${NS}/gripper/assist/status`,
     recordStart: `/${NS}/mujoco/record/start`,
     recordStop: `/${NS}/mujoco/record/stop`,
@@ -97,9 +99,6 @@
     gravityQuery: document.getElementById('ros-gravity-status-query'),
    rosOpenGripper: document.getElementById('ros-open-gripper'),
    closeGripper: document.getElementById('ros-close-gripper'),
-   releaseGripper: document.getElementById('ros-release-gripper'),
-   assistGripper: document.getElementById('ros-assist-gripper'),
-   holdGripper: document.getElementById('ros-hold-gripper'),
    clearLog: document.getElementById('ros-clear-log'),
    log: document.getElementById('ros-log'),
    cameraCanvas: document.getElementById('ros-camera-canvas'),
@@ -191,6 +190,10 @@
  let latestJointPositions = null;
  let rosBackend = 'unknown';
  let latestArmEnabled = false;
+ let armStatusSeen = false;
+ let rosTargetReady = false;
+ let rosConnectionState = 'closed';
+ let rosStatusMessage = '';
   let latestJointStateAt = 0;
   let latestMujocoStateAt = 0;
   let latestGripperPosition = null;
@@ -225,7 +228,6 @@
   let gravityStatusPollInFlight = false;
   let gripperAssistPollInFlight = false;
   let gripperAssistActive = false;
-  let gripperManualFree = false;
   let activeTeachingGripperReplay = null;
   let activePresetTransition = null;
   window.addEventListener('rebot-leader-starting', () => {
@@ -286,10 +288,12 @@
      resetFeedbackRenderer();
      updateGravityStatus(false, t('msg.rosNotConnected'), 'connection');
    }
-   if (detail.state === 'open') {
-     window.setTimeout(() => {
-       runDiagnostics();
-     }, 250);
+  if (detail.state === 'open') {
+    resetRosTargetState();
+    setStatus('open', t('msg.rosBridgeConnected'));
+    window.setTimeout(() => {
+      runDiagnostics();
+    }, 250);
    }
   });
 
@@ -345,43 +349,6 @@
   els.gravityQuery.addEventListener('click', queryGravityCompensation);
  els.rosOpenGripper.addEventListener('click', () => sendGripper(OPEN_GRIPPER_M, { requireControl: true }));
  els.closeGripper.addEventListener('click', () => sendGripper(CLOSE_GRIPPER_M, { requireControl: true }));
- els.releaseGripper?.addEventListener('click', async () => {
-   const result = await guardedOptionalService(
-     REQUIRED_SERVICES.gripperRelease,
-     () => client.releaseGripper(),
-     t('msg.reqGripperRelease')
-   );
-   if (result && result.success !== false) {
-     gripperAssistActive = false;
-     gripperManualFree = true;
-   }
-   updateGripperModeDisplay();
- });
- els.assistGripper?.addEventListener('click', async () => {
-   if (!window.confirm(t('msg.gripperAssistConfirm'))) return;
-   const result = await guardedOptionalService(
-     REQUIRED_SERVICES.gripperAssistStart,
-     () => client.startGripperAssist(),
-     t('msg.reqGripperAssist')
-   );
-   if (result && result.success !== false) {
-     gripperAssistActive = true;
-     gripperManualFree = false;
-   }
-   updateGripperModeDisplay();
- });
- els.holdGripper?.addEventListener('click', async () => {
-   const result = await guardedOptionalService(
-     REQUIRED_SERVICES.gripperHold,
-     () => client.holdGripper(),
-     t('msg.reqGripperHold')
-   );
-   if (result && result.success !== false) {
-     gripperAssistActive = false;
-     gripperManualFree = false;
-   }
-   updateGripperModeDisplay();
- });
  els.clearLog.addEventListener('click', () => { els.log.innerHTML = ''; });
   els.checkIk.addEventListener('click', checkIk);
   document.getElementById('ros-help-top')?.addEventListener('click', () => document.getElementById('ros-help-dialog')?.showModal());
@@ -1046,6 +1013,7 @@
   }
 
   function handleArmStatus(msg) {
+    armStatusSeen = true;
     latestArmEnabled = Boolean(msg.enabled);
     const enabled = msg.enabled ? t('st.enabled') : t('st.disabled');
     const mode = msg.mode || 'unknown';
@@ -1058,6 +1026,7 @@
     if (hardwareTeachActive && hardwareTeachModeConfirmed && machine !== 'GRAVITY_COMP') {
       void stopHardwareTeaching(false);
     }
+    updateRosTargetReady();
     updateDiagnostics();
   }
 
@@ -1108,7 +1077,6 @@
       hardwareTeachActive = true;
       hardwareTeachGravityStarted = true;
       gripperAssistActive = true;
-      gripperManualFree = false;
       updateGripperModeDisplay();
       if (!els.mirror.checked) els.mirror.checked = true;
       if (!window.reBotSim.beginHardwareTeaching()) {
@@ -1870,6 +1838,10 @@
       client.disconnect();
       return;
     }
+    if (!rosTargetReady) {
+      client.disconnect();
+      return;
+    }
 
     safeDisconnectBusy = true;
     els.disconnect.disabled = true;
@@ -1936,11 +1908,6 @@
     try {
       const result = await client.gripperAssistStatus();
       gripperAssistActive = Boolean(result && result.success);
-      gripperManualFree = Boolean(
-        result
-        && typeof result.message === 'string'
-        && result.message.includes('released for manual')
-      );
       updateGripperModeDisplay();
     } catch (_error) {
       // Connection diagnostics report transport failures; retain the last
@@ -1954,10 +1921,10 @@
     if (!els.gripperMode) return;
     els.gripperMode.textContent = gripperAssistActive
       ? t('ros.gripperModeAssist')
-      : (gripperManualFree ? t('ros.gripperModeFree') : t('ros.gripperModeHolding'));
+      : t('ros.gripperModeHolding');
     els.gripperMode.style.color = gripperAssistActive
       ? '#ffd27a'
-      : (gripperManualFree ? '#d7fff4' : '#ffe0b0');
+      : '#ffe0b0';
   }
 
   async function runDiagnostics() {
@@ -2165,6 +2132,10 @@
      if (interactive) setStatus('closed', t('msg.rosNotConnected'));
      return false;
    }
+   if (!rosTargetReady) {
+     if (interactive) setMessage(t('msg.targetNotReady'));
+     return false;
+   }
    // RS Fake Driver is auto-allowed in simulation mode.
    if (TARGET_KEY === 'simulation' && rosBackend === 'fake-rs') return true;
     if (!els.control.checked) {
@@ -2206,6 +2177,37 @@
     }
   }
 
+  function updateRosTargetReady() {
+    if (!client.connected) {
+      if (rosTargetReady) {
+        rosTargetReady = false;
+        renderConnectionStatus();
+      }
+      return;
+    }
+
+    const now = Date.now();
+    const topics = TARGET_KEY === 'simulation'
+      ? [REQUIRED_TOPICS.jointStates, REQUIRED_TOPICS.mujocoJointStates]
+      : [REQUIRED_TOPICS.jointStates];
+    const jointFeedbackFresh = topics.some((topic) => now - client.getLastMessageAt(topic) < 1000);
+    const nextReady = armStatusSeen && jointFeedbackFresh;
+    if (nextReady === rosTargetReady) return;
+
+    rosTargetReady = nextReady;
+    rosStatusMessage = t(nextReady ? 'msg.targetReady' : 'msg.targetNotReady');
+    renderConnectionStatus();
+  }
+
+  function resetRosTargetState() {
+    armStatusSeen = false;
+    rosTargetReady = false;
+    rosBackend = 'unknown';
+    latestArmEnabled = false;
+    listedTopics.clear();
+    listedServices.clear();
+  }
+
   function canConnectWebSocketUrl(url) {
     if (window.location.protocol === 'https:' && /^ws:\/\//i.test(url)) {
       const message = t('msg.httpsWsBlocked');
@@ -2233,6 +2235,10 @@
  async function guardedCall(call, optimisticMessage, allowWithoutControl, options) {
    if (!client.connected) {
      setStatus('closed', t('msg.rosNotConnected'));
+     return null;
+   }
+   if (!rosTargetReady) {
+     setMessage(t('msg.targetNotReady'));
      return null;
    }
     if (!allowWithoutControl && !controlAllowed(false)) {
@@ -2276,6 +2282,7 @@
   }
 
   function updateDiagnostics() {
+    updateRosTargetReady();
     updateCameraStatusFromTopic();
   }
 
@@ -2530,7 +2537,7 @@
     const pose = poseFromVisionTarget(getVisionApproachZ(target), target);
     if (!pose) return;
     writePoseInputs(pose);
-    if (client.connected) client.publishTargetPose(pose);
+    if (client.connected && controlAllowed(false)) client.publishTargetPose(pose);
     setMessage(t('msg.visionFillPose'));
     writeLog('视觉目标 -> Pose 输入框', 'ok');
   }
@@ -2693,10 +2700,10 @@
       const openGripper = async () => {
         const settings = {
           timeoutMs: 4500,
-          minWaitMs: 850,
+          minWaitMs: 500,
           tolerance: 0.0035,
           requireReached: true,
-          afterMs: 180
+          afterMs: 100
         };
         try {
           await commandGripperAndWait(OPEN_GRIPPER_M, t('msg.pickOpenGripper'), settings);
@@ -2722,7 +2729,7 @@
       const route = buildVisionTransitRoute(target);
       const moveHighRoute = async () => {
         for (const waypoint of route) {
-          await runIfNeeded(waypoint.pose, Math.max(1.2, duration * 0.65), waypoint.label);
+          await runIfNeeded(waypoint.pose, Math.max(0.9, duration * 0.45), waypoint.label);
         }
       };
 
@@ -2754,15 +2761,11 @@
       }
 
       writePoseInputs(plan.approachPose);
-      await runIfNeeded(plan.approachPose, duration, t('msg.pickMoveAbove', { color: target.color }));
+      await runIfNeeded(plan.approachPose, Math.max(0.8, duration * 0.45), t('msg.pickMoveAbove', { color: target.color }));
 
-      const alignDuration = Math.max(1.0, duration * 0.55);
-      await runIfNeeded(plan.verticalAlignPose, alignDuration, t('msg.pickAlign', { color: target.color }));
 
-      const pregraspDuration = Math.max(0.85, duration * 0.45);
-      await runIfNeeded(plan.pregraspPose, pregraspDuration, t('msg.pickPreDescend', { color: target.color }));
 
-      const descendDuration = Math.max(1.1, duration * 0.65);
+      const descendDuration = Math.max(0.7, duration * 0.4);
       await runIfNeeded(plan.graspPose, descendDuration, t('msg.pickDescend', { color: target.color }));
 
       await commandGripperAndWait(plan.graspPlan.command, t('msg.pickSqueeze', { color: target.color }), {
@@ -2770,8 +2773,8 @@
         // directly to qpos.  A full-open grasp can take more than 4.5 s once
         // the finger collision pieces begin touching the object, so keep the
         // sequence alive until the measured fingers have actually settled.
-        timeoutMs: 9000,
-        minWaitMs: 850,
+        timeoutMs: 4500,
+        minWaitMs: 500,
         tolerance: 0.006,
         allowContactStop: true,
         // The requested width already includes GRASP_SQUEEZE_M.  Requiring the
@@ -2782,15 +2785,15 @@
         requireContactStop: false,
         contactTolerance: 0.0025,
         requireSettled: true,
-        settleMs: 420,
+        settleMs: 250,
         // Contact introduces sub-millimetre MuJoCo oscillation even though the
         // object is already firmly pinched. 1.5 mm is still well below the
         // per-sample travel while the 5 rad/s gripper is actually closing.
         positionStableTolerance: 0.0015,
-        afterMs: 220
+        afterMs: 120
       });
       writeLog(`夹爪已稳定夹紧 ${target.color}，开始离桌抬升`, 'ok');
-      const firstLiftDuration = Math.max(1.25, duration * 0.75);
+      const firstLiftDuration = Math.max(0.8, duration * 0.5);
       if (String(target.color || '') === 'blue') {
         await runVisionMoveStep(plan.firstLiftPose, firstLiftDuration, t('msg.pickBlueLift', { z: plan.firstLiftPose.position.z.toFixed(3) }));
         lastPose = plan.firstLiftPose;
@@ -2798,7 +2801,7 @@
         await runIfNeeded(plan.firstLiftPose, firstLiftDuration, t('msg.pickLift', { color: target.color }));
       }
 
-      const liftedTarget = await waitForFreshVisionTarget(target.color, 800);
+      const liftedTarget = await waitForFreshVisionTarget(target.color, 600);
       const liftCheck = verifyVisionLift(target, liftedTarget);
       if (!liftCheck.ok) {
         throw new Error(`视觉抓取失败：物体没有随夹爪抬起（${liftCheck.message}）`);
@@ -2807,19 +2810,22 @@
       writeLog(`物理抓取验证通过：物体抬升 ${(liftCheck.deltaZ * 1000).toFixed(0)}mm`, 'ok');
 
       if (String(target.color || '') === 'blue') {
-        await runVisionMoveStep(plan.transitPose, Math.max(1.45, duration * 0.70), t('msg.pickBlueTransit', { z: plan.transitPose.position.z.toFixed(3) }));
+        await runIfNeeded(plan.transitPose, Math.max(0.8, duration * 0.5), t('msg.pickBlueTransit', { z: plan.transitPose.position.z.toFixed(3) }));
         lastPose = plan.transitPose;
       }
-
-      const liftDuration = Math.max(1.8, duration * 0.85);
-      await runIfNeeded(plan.approachPose, liftDuration, t('msg.pickRaise', { color: target.color }));
-
-      const finalTransitDuration = Math.max(1.1, duration * 0.60);
-      await runIfNeeded(plan.transitPose, finalTransitDuration, t('msg.pickTransit', { color: target.color }));
-
-      lastVisionTarget = cloneVisionTarget(target);
-      setMessage(t('msg.graspDemoDone', { mm: Math.round(plan.graspPlan.physicalGap * 1000) }));
-      writeLog(t('log.graspDone', { mm: Math.round(plan.graspPlan.command * 1000) }), 'ok');
+      const actualTcp = window.reBotSim && typeof window.reBotSim.getTcpPosition === 'function'
+        ? window.reBotSim.getTcpPosition()
+        : null;
+      const carryOffset = buildVisionCarryOffset(plan, liftedTarget, actualTcp);
+      const storageTarget = buildStorageVisionTarget(target, carryOffset) || target;
+      await safelyPlaceVisionTarget(storageTarget, duration, '视觉入仓', {
+        transferPose: buildStorageRoutePose(storageTarget, WEB_MUJOCO_LIFT_CLEARANCE_M),
+        placePose: poseFromVisionTarget(Number(storageTarget.z), storageTarget),
+        retreatPose: buildStorageRoutePose(storageTarget, WEB_MUJOCO_RETREAT_CLEARANCE_M)
+      });
+      lastVisionTarget = cloneVisionTarget(storageTarget);
+      setMessage(t('msg.pickStoreDone', { color: target.color }));
+      writeLog(t('msg.pickStoreDone', { color: target.color }), 'ok');
     } catch (error) {
       const message = error && error.message ? error.message : t('msg.visionPickAbort');
      setMessage(message);
@@ -2829,36 +2835,36 @@
    }
  }
 
-  async function safelyPlaceVisionTarget(target, duration, reason) {
+  async function safelyPlaceVisionTarget(target, duration, reason, route = {}) {
     const plan = buildVisionPickPlan(target);
     if (!plan) throw new Error(`${reason || '视觉放置'}：目标位姿无效`);
     await runVisionMoveStep(
-      plan.approachPose,
-      Math.max(1.1, duration * 0.65),
-      `${reason || '视觉放置'}：移动到 ${target.color} 上方`
+      route.transferPose || plan.approachPose,
+      Math.max(0.8, duration * 0.45),
+      `${reason || '视觉放置'}：高位转移到 ${target.color}`
     );
     await runVisionMoveStep(
-      plan.graspPose,
-      Math.max(1.1, duration * 0.65),
+      route.placePose || plan.graspPose,
+      Math.max(0.7, duration * 0.4),
       `${reason || '视觉放置'}：下探 ${target.color}`
     );
     await commandGripperAndWait(OPEN_GRIPPER_M, `${reason || '视觉放置'}：松开 ${target.color}`, {
       // MuJoCo's force-driven fingers need the same physical travel time when
       // opening as when closing.  The previous 4.5 s timeout expired while the
       // fingers were still moving and prevented release/retreat.
-      timeoutMs: 9000,
-      minWaitMs: 850,
+      timeoutMs: 4500,
+      minWaitMs: 500,
       tolerance: 0.006,
       requireReached: true,
       requireSettled: true,
-      settleMs: 320,
-      afterMs: 220
+      settleMs: 200,
+      afterMs: 120
     });
     releaseSimCarriedObject();
     await runVisionMoveStep(
-      plan.approachPose,
-      Math.max(1.5, duration * 0.8),
-      `${reason || '视觉放置'}：抬高 ${target.color}`
+      route.retreatPose || plan.approachPose,
+      Math.max(0.8, duration * 0.45),
+      `${reason || '视觉放置'}：竖直抬升离开 ${target.color}`
     );
     lastVisionTarget = cloneVisionTarget(target);
   }
@@ -2916,7 +2922,7 @@
 
   async function waitForArmMotionSettled(label, jointGoal) {
     if (TARGET_KEY !== 'simulation' || !mujocoStateIsFresh()) return;
-    const timeoutMs = 2600;
+    const timeoutMs = 1200;
     const started = performance.now();
     let previousStamp = latestJointStateAt;
     let previous = getCurrentRosPositions();
@@ -2940,7 +2946,7 @@
       const stable = sampleDelta < 0.0012 && goalError < 0.025;
       if (stable) {
         if (!stableSince) stableSince = performance.now();
-        if (performance.now() - stableSince >= 260) {
+        if (performance.now() - stableSince >= 120) {
           writeLog(`${label}：MuJoCo 实际反馈已到位`, 'ok');
           return;
         }
@@ -2969,44 +2975,76 @@
   function buildVisionPickPlan(target) {
     const approachZ = getVisionApproachZ(target);
     const graspZ = getVisionGraspZ(target);
-    const transitPose = poseFromVisionTarget(getVisionTransitZ(target), target);
     const approachPose = poseFromVisionTarget(approachZ, target);
-    const verticalAlignZ = Math.min(
-      approachZ,
-      Math.max(graspZ + VISION_VERTICAL_ALIGN_CLEARANCE_M, VISION_MIN_VERTICAL_ALIGN_Z_M)
-    );
-    const pregraspZ = Math.min(
-      verticalAlignZ,
-      Math.max(graspZ + VISION_PREGRASP_CLEARANCE_M, graspZ)
-    );
-    const verticalAlignPose = poseFromVisionTarget(verticalAlignZ, target);
-    const pregraspPose = poseFromVisionTarget(pregraspZ, target);
     const graspPose = poseFromVisionTarget(graspZ, target);
-    const firstLiftZ = Math.min(
-      approachZ,
-      Math.max(graspZ + VISION_FIRST_LIFT_CLEARANCE_M, getVisionFirstLiftMinZ(target))
+    const firstLiftZ = Math.max(
+      graspZ + VISION_FIRST_LIFT_CLEARANCE_M,
+      getVisionFirstLiftMinZ(target),
+      visionObjectZ(target) + WEB_MUJOCO_LIFT_CLEARANCE_M
     );
     const firstLiftPose = poseFromVisionTarget(firstLiftZ, target);
-    if (!transitPose || !approachPose || !verticalAlignPose || !pregraspPose || !graspPose || !firstLiftPose) return null;
+    const transitPose = firstLiftPose;
+    if (!transitPose || !approachPose || !graspPose || !firstLiftPose) return null;
     return {
       target,
       approachZ,
       graspZ,
       transitPose,
       approachPose,
-      verticalAlignPose,
-      pregraspPose,
       graspPose,
       firstLiftPose,
       graspPlan: estimateVisionGraspPlan(target)
     };
   }
 
+  function buildStorageVisionTarget(target, carryOffset = defaultVisionCarryOffset(target)) {
+    const color = target && target.color ? String(target.color).toLowerCase() : '';
+    const zone = STORAGE_ZONES[color];
+    if (!zone) return null;
+    const clone = cloneVisionTarget(target) || { color };
+    clone.x = zone.x - Number(carryOffset.x || 0);
+    clone.y = zone.y - Number(carryOffset.y || 0);
+    clone.z = zone.z - Number(carryOffset.z || 0) - WEB_MUJOCO_PLACE_PRESS_DEPTH_M;
+    clone.storageObjectZ = zone.z;
+    return clone;
+  }
+
+  function buildVisionCarryOffset(plan, liftedTarget, actualTcp) {
+    if (actualTcp && Number.isFinite(actualTcp.x) && Number.isFinite(actualTcp.y) && Number.isFinite(actualTcp.z)) {
+      const x = Number(liftedTarget.x) - Number(actualTcp.x);
+      const y = Number(liftedTarget.y) - Number(actualTcp.y);
+      const z = Number(liftedTarget.z) - Number(actualTcp.z);
+      if ([x, y, z].every(Number.isFinite)) return { x, y, z };
+    }
+    if (!plan || !liftedTarget) return defaultVisionCarryOffset(plan && plan.target);
+    const x = Number(liftedTarget.x) - Number(plan.firstLiftPose.position.x);
+    const y = Number(liftedTarget.y) - Number(plan.firstLiftPose.position.y);
+    const z = Number(liftedTarget.z) - Number(plan.firstLiftPose.position.z);
+    if (![x, y, z].every(Number.isFinite)) return defaultVisionCarryOffset(plan.target);
+    return { x, y, z };
+  }
+
+  function defaultVisionCarryOffset(target) {
+    return {
+      x: 0,
+      y: 0,
+      z: getVisionGraspZ(target) - visionObjectZ(target)
+    };
+  }
+
+  function buildStorageRoutePose(target, clearance) {
+    const objectZ = Number(target && target.storageObjectZ);
+    const z = Number.isFinite(objectZ)
+      ? objectZ + clearance
+      : visionObjectZ(target) + clearance;
+    return poseFromVisionTarget(z, target);
+  }
+
   function buildVisionTransitRoute(target) {
     const route = [];
     appendVisionRoutePose(
       route,
-      poseFromVisionTarget(getVisionTransitZ(target), target),
+      poseFromVisionTarget(getVisionApproachZ(target), target),
       t('msg.avoidMove', { color: target.color })
     );
     return route;
@@ -3134,17 +3172,19 @@
   }
 
   function getVisionApproachZ(target) {
-    const transitZ = getVisionTransitZ(target);
-    const detected = target && Number.isFinite(Number(target.z)) ? Number(target.z) : transitZ;
+    const detected = visionObjectZ(target);
     const requested = Number(els.visionApproachZ && els.visionApproachZ.value);
     const value = Number.isFinite(requested) ? requested : detected;
-    return clamp(Math.max(value, transitZ), 0.08, 0.42);
+    return clamp(
+      Math.max(value, visionObjectZ(target) + WEB_MUJOCO_APPROACH_CLEARANCE_M),
+      0.08,
+      0.42
+    );
   }
 
-  function getVisionTransitZ(target) {
-    const color = target && target.color ? String(target.color) : '';
-    const value = VISION_TRANSIT_Z_BY_COLOR_M[color];
-    return Number.isFinite(value) ? value : VISION_TRANSIT_Z_M;
+  function visionObjectZ(target) {
+    const z = Number(target && target.z);
+    return Number.isFinite(z) ? z : 0.12;
   }
 
   function getVisionGraspZ(target) {
@@ -3157,7 +3197,7 @@
   function estimateVisionGraspZ(target) {
     // The TCP is at the centre of the 79 mm-long finger pads, not at the
     // object's centre. z=0.140 keeps the pad tips just above the 0.100 m table.
-    return 0.140;
+    return visionObjectZ(target) + 0.003;
   }
 
   function getVisionFirstLiftMinZ(target) {
@@ -3618,7 +3658,6 @@
 
   function publishGripperWidthCommand(width) {
     gripperAssistActive = false;
-    gripperManualFree = false;
     updateGripperModeDisplay();
     client.publishGripperCommand(gripperWidthToMotor(width), GRIPPER_VLIM_RAD_S);
   }
@@ -3696,20 +3735,31 @@
  }
 
   function setStatus(state, message) {
+    rosConnectionState = state;
+    rosStatusMessage = message;
+    renderConnectionStatus();
+  }
+
+  function renderConnectionStatus() {
     els.status.className = 'mini-pill';
-    if (state === 'open') {
-      els.status.classList.add('online');
-      els.status.textContent = t('st.online');
-    } else if (state === 'connecting') {
+    if (rosConnectionState === 'open') {
+      if (rosTargetReady) {
+        els.status.classList.add('online');
+        els.status.textContent = t('st.online');
+      } else {
+        els.status.classList.add('warn');
+        els.status.textContent = t('st.bridgeOnline');
+      }
+    } else if (rosConnectionState === 'connecting') {
       els.status.classList.add('warn');
       els.status.textContent = t('st.connecting');
-    } else if (state === 'error') {
+    } else if (rosConnectionState === 'error') {
       els.status.classList.add('error');
       els.status.textContent = t('st.error');
     } else {
       els.status.textContent = t('st.offline');
     }
-    setMessage(message);
+    setMessage(rosStatusMessage);
   }
 
   function setMessage(message) {
@@ -3735,13 +3785,7 @@
       if (els.visionPlaceDemo && !visionSequenceBusy) {
         els.visionPlaceDemo.textContent = t('camera.place');
       }
-      if (els.status) {
-        if (client.connected) {
-          els.status.textContent = t('st.online');
-        } else {
-          els.status.textContent = t('st.offline');
-        }
-      }
+      if (els.status) renderConnectionStatus();
     });
   }
 

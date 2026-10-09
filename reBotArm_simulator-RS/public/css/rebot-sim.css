@@ -512,7 +512,8 @@ input[type="range"]::-webkit-slider-thumb {
   outline: none;
 }
 
-.field-row input:focus {
+.field-row input:focus,
+.field-row select:focus-visible {
   border-color: rgba(51, 214, 176, 0.75);
 }
 

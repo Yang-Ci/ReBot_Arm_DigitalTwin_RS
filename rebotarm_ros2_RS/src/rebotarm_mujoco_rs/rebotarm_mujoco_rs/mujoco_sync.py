@@ -15,10 +15,15 @@ import rclpy
 from geometry_msgs.msg import PoseStamped
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
+from rclpy.parameter import Parameter
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from rcl_interfaces.msg import SetParametersResult
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import JointState
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
+
+from .wrist_cameras import CAMERA_MODELS, WristCameraAssemblies
 
 
 _ARM_JOINTS = tuple(f"joint{index}" for index in range(1, 7))
@@ -67,6 +72,7 @@ class RsMujocoSync(Node):
         self.declare_parameter("target_pose_topic", "")
         self.declare_parameter("target_visible_timeout", 0.7)
         self.declare_parameter("model_path", "")
+        self.declare_parameter("wrist_camera_model", "d405")
         self.declare_parameter("simulation_mode", "kinematic")
         self.declare_parameter("update_rate", 250.0)
         self.declare_parameter("smoothing_alpha", 1.0)
@@ -128,6 +134,9 @@ class RsMujocoSync(Node):
 
         self.model = mujoco.MjModel.from_xml_path(str(self.model_path))
         self.data = mujoco.MjData(self.model)
+        self.wrist_cameras = WristCameraAssemblies(self.model, self.model_path)
+        self.wrist_cameras.select(str(self.get_parameter("wrist_camera_model").value))
+        self._pending_camera_cycle = 0
         mujoco.mj_forward(self.model, self.data)
         target_body_id = mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_BODY, "ik_target"
@@ -240,7 +249,17 @@ class RsMujocoSync(Node):
         if bool(self.get_parameter("use_viewer").value):
             from mujoco import viewer as mujoco_viewer
 
-            self.viewer = mujoco_viewer.launch_passive(self.model, self.data)
+            self.viewer = mujoco_viewer.launch_passive(
+                self.model, self.data, key_callback=self._viewer_key_callback
+            )
+
+        self.camera_model_publisher = self.create_publisher(
+            String, f"/{namespace}/mujoco/wrist_camera_model",
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                       reliability=ReliabilityPolicy.RELIABLE),
+        )
+        self.add_on_set_parameters_callback(self._camera_parameter_callback)
+        self._publish_camera_model()
 
         self.timer = self.create_timer(1.0 / self.update_rate, self._update)
         self.get_logger().info(
@@ -248,6 +267,36 @@ class RsMujocoSync(Node):
             f"output={output_topic}, target_pose={target_pose_topic}, "
             f"model={self.model_path}"
         )
+        self.get_logger().info(
+            f"Wrist camera: {self.wrist_cameras.label}; press C in MuJoCo to cycle cameras"
+        )
+
+    def _viewer_key_callback(self, keycode):
+        # GLFW invokes this on its own thread. Only queue work; ROS and model
+        # mutations stay on the node's executor thread under the viewer lock.
+        if keycode in (ord("C"), ord("c")):
+            self._pending_camera_cycle += 1
+
+    def _publish_camera_model(self):
+        self.camera_model_publisher.publish(String(data=self.wrist_cameras.active))
+
+    def _camera_parameter_callback(self, parameters):
+        selected = [p.value for p in parameters if p.name == "wrist_camera_model"]
+        if not selected:
+            return SetParametersResult(successful=True)
+        name = selected[-1]
+        if name not in CAMERA_MODELS:
+            return SetParametersResult(successful=False,
+                                       reason="Choose d405, d435i, gemini2 or uvc32")
+        viewer_lock = self.viewer.lock() if self.viewer is not None else nullcontext()
+        with viewer_lock:
+            self.wrist_cameras.select(name)
+            mujoco.mj_forward(self.model, self.data)
+        if self.viewer is not None and self.viewer.is_running():
+            self.viewer.sync()
+        self._publish_camera_model()
+        self.get_logger().info(f"Wrist camera switched to {self.wrist_cameras.label}")
+        return SetParametersResult(successful=True)
 
     def _vector_parameter(self, name: str) -> np.ndarray:
         values = np.asarray(self.get_parameter(name).value, dtype=np.float64)
@@ -306,6 +355,11 @@ class RsMujocoSync(Node):
         return float(ratio * _MUJOCO_GRIPPER_OPEN_M)
 
     def _update(self) -> None:
+        if self._pending_camera_cycle:
+            count = self._pending_camera_cycle
+            self._pending_camera_cycle -= count
+            index = (CAMERA_MODELS.index(self.wrist_cameras.active) + count) % len(CAMERA_MODELS)
+            self.set_parameters([Parameter("wrist_camera_model", value=CAMERA_MODELS[index])])
         if self.last_input_time == 0.0:
             return
         if (

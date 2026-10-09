@@ -11,8 +11,11 @@ import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import CameraInfo, Image, JointState
 from std_msgs.msg import String
+
+from .wrist_cameras import CAMERA_MODELS, WristCameraAssemblies
 
 from .mujoco_sync import find_default_model
 
@@ -28,6 +31,7 @@ class RsSceneCamera(Node):
         super().__init__("rebotarm_rs_scene_camera")
         self.declare_parameter("arm_namespace", "rebotarm_rs")
         self.declare_parameter("model_path", "")
+        self.declare_parameter("wrist_camera_model", "d405")
         self.declare_parameter("joint_state_topic", "")
         self.declare_parameter("object_states_topic", "")
         self.declare_parameter("image_topic", "")
@@ -72,6 +76,8 @@ class RsSceneCamera(Node):
 
         self.model = mujoco.MjModel.from_xml_path(str(self.model_path))
         self.data = mujoco.MjData(self.model)
+        self.wrist_cameras = WristCameraAssemblies(self.model, self.model_path)
+        self.wrist_cameras.select(str(self.get_parameter("wrist_camera_model").value))
         self.joint_qpos = {
             name: self._joint_qpos_addr(name)
             for name in (*_ARM_JOINTS, "joint7", "joint_left", "joint_right")
@@ -88,6 +94,11 @@ class RsSceneCamera(Node):
         self._lock = threading.RLock()
         self._renderer: mujoco.Renderer | None = None
         self._renderer_error_reported = False
+        self.create_subscription(
+            String, f"/{namespace}/mujoco/wrist_camera_model", self._camera_model_callback,
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                       reliability=ReliabilityPolicy.RELIABLE),
+        )
         self.image_pub = self.create_publisher(
             Image, self.image_topic, qos_profile_sensor_data
         )
@@ -109,6 +120,13 @@ class RsSceneCamera(Node):
             f"camera={self.camera_name}, image={self.image_topic}, "
             f"size={self.width}x{self.height}@{publish_hz:g}Hz"
         )
+
+    def _camera_model_callback(self, message):
+        if message.data not in CAMERA_MODELS:
+            return
+        with self._lock:
+            self.wrist_cameras.select(message.data)
+            mujoco.mj_forward(self.model, self.data)
 
     def _joint_qpos_addr(self, name: str) -> int:
         joint_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, name)
@@ -186,7 +204,7 @@ class RsSceneCamera(Node):
                 rgb = self._renderer.render().copy()
         except Exception as exc:
             if not self._renderer_error_reported:
-                self.get_logger().error(f"RS overhead camera rendering failed: {exc}")
+                self.get_logger().error(f"RS {self.camera_name} camera rendering failed: {exc}")
                 self._renderer_error_reported = True
             return
 

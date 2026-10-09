@@ -414,6 +414,7 @@ async function main() {
   renderCameraViewsToggle();
   toggleCameraModelEl?.addEventListener('click', () => {
     cameraModelVisible = view.setCameraModelVisible(!cameraModelVisible);
+    renderCameraViewsToggle();
     renderCameraModelToggle();
     setStatus(t(cameraModelVisible ? 'status.cameraModelOn' : 'status.cameraModelOff'));
   });

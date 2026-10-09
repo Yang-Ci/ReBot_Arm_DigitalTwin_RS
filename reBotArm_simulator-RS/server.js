@@ -65,6 +65,7 @@ const MIME_TYPES = {
   '.json': 'application/json; charset=utf-8',
   '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.png': 'image/png',
+  '.dae': 'model/vnd.collada+xml',
   '.stl': 'model/stl',
   '.STL': 'model/stl',
   '.urdf': 'application/xml; charset=utf-8',

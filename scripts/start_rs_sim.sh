@@ -63,6 +63,8 @@ REBOTARM_CHILD_PIDS+=("$!")
 setsid ros2 launch rebotarm_mujoco_rs mujoco_rs.launch.py \
   arm_namespace:=rebotarm_rs \
   simulation_mode:="${REBOTARM_MUJOCO_MODE:-physics}" \
+  wrist_camera_model:="${REBOTARM_WRIST_CAMERA_MODEL:-d405}" \
+  enable_camera_selector:="${REBOTARM_CAMERA_SELECTOR:-${REBOTARM_MUJOCO_VIEWER:-true}}" \
   use_viewer:="${REBOTARM_MUJOCO_VIEWER:-true}" 9>&- &
 REBOTARM_CHILD_PIDS+=("$!")
 
@@ -90,6 +92,7 @@ fi
 echo "RS simulation: /rebotarm_rs"
 echo "MuJoCo mode: ${REBOTARM_MUJOCO_MODE:-physics}"
 echo "MuJoCo viewer: ${REBOTARM_MUJOCO_VIEWER:-true}"
+echo "Wrist camera: ${REBOTARM_WRIST_CAMERA_MODEL:-d405} (press C in MuJoCo to switch)"
 echo "MuJoCo state: /rebotarm_rs/mujoco/joint_states"
 echo "Object states: /rebotarm_rs/mujoco/object_states"
 echo "Color detections: /rebotarm_rs/vision/color_blocks/detections"
