@@ -30,12 +30,13 @@ npm start
 
 浏览器访问 `http://localhost:3002`。
 
-控制台顶部的“腕部相机模型”可以切换三种相机及其支架，默认无相机；刷新后恢复上次
+控制台顶部的“腕部相机模型”可以切换四种相机及其支架，默认无相机；刷新后恢复上次
 成功选择的型号。切换保留关节姿态、夹爪和示教状态，相机随腕部运动，目标残影同步显示
 对应装配。加载失败时保留原装配，可以重新选择重试。
 
-安装位置来自 `xiehuangbao888/rebot_visual_grasp` 的三份装配 Xacro；相机本体和光学
-坐标系使用 RealSense / Orbbec 描述包，资源已随项目保存，无需在浏览器运行 ROS 或 Xacro。
+D405、D435i、Gemini 2 的安装位置来自 `xiehuangbao888/rebot_visual_grasp` 的三份装配 Xacro，
+相机本体和光学坐标系使用 RealSense / Orbbec 描述包。32×32 UVC 支架由官方 STEP 文件生成，
+相机板和镜头为通用仿真示意。资源已随项目保存，无需在浏览器运行 ROS 或 Xacro。
 这个选择器更改网页模型；ROS 相机图像话题仍由已有连接配置决定。
 来源、安装参数和 URDF 重新生成方法见
 [腕部相机资源说明](public/models/wrist-cameras/README.md)。
