@@ -20,7 +20,7 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rcl_interfaces.msg import SetParametersResult
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import JointState
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
 
 from .wrist_cameras import CAMERA_MODELS, WristCameraAssemblies
@@ -78,6 +78,7 @@ class RsMujocoSync(Node):
         self.declare_parameter("smoothing_alpha", 1.0)
         self.declare_parameter("stale_timeout", 1.0)
         self.declare_parameter("use_viewer", False)
+        self.declare_parameter("show_tcp_marker", False)
         self.declare_parameter("object_names", list(_DEFAULT_OBJECTS))
         self.declare_parameter("object_publish_rate", 30.0)
         self.declare_parameter("arm_kp", [80.0, 100.0, 100.0, 35.0, 25.0, 18.0])
@@ -134,9 +135,15 @@ class RsMujocoSync(Node):
 
         self.model = mujoco.MjModel.from_xml_path(str(self.model_path))
         self.data = mujoco.MjData(self.model)
+        self.tcp_site_id = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_SITE, "tcp"
+        )
+        self.show_tcp_marker = bool(self.get_parameter("show_tcp_marker").value)
+        self._set_tcp_marker_visible_locked(self.show_tcp_marker)
         self.wrist_cameras = WristCameraAssemblies(self.model, self.model_path)
         self.wrist_cameras.select(str(self.get_parameter("wrist_camera_model").value))
         self._pending_camera_cycle = 0
+        self._pending_tcp_toggle = 0
         mujoco.mj_forward(self.model, self.data)
         target_body_id = mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_BODY, "ik_target"
@@ -258,8 +265,14 @@ class RsMujocoSync(Node):
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
                        reliability=ReliabilityPolicy.RELIABLE),
         )
-        self.add_on_set_parameters_callback(self._camera_parameter_callback)
+        self.tcp_marker_publisher = self.create_publisher(
+            Bool, f"/{namespace}/mujoco/tcp_marker_visible",
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                       reliability=ReliabilityPolicy.RELIABLE),
+        )
+        self.add_on_set_parameters_callback(self._visual_parameter_callback)
         self._publish_camera_model()
+        self._publish_tcp_marker_visible()
 
         self.timer = self.create_timer(1.0 / self.update_rate, self._update)
         self.get_logger().info(
@@ -270,32 +283,58 @@ class RsMujocoSync(Node):
         self.get_logger().info(
             f"Wrist camera: {self.wrist_cameras.label}; press C in MuJoCo to cycle cameras"
         )
+        self.get_logger().info(
+            f"TCP marker: {'shown' if self.show_tcp_marker else 'hidden'}; "
+            "press T in MuJoCo to show/hide"
+        )
 
     def _viewer_key_callback(self, keycode):
         # GLFW invokes this on its own thread. Only queue work; ROS and model
         # mutations stay on the node's executor thread under the viewer lock.
         if keycode in (ord("C"), ord("c")):
             self._pending_camera_cycle += 1
+        elif keycode in (ord("T"), ord("t")):
+            self._pending_tcp_toggle += 1
 
     def _publish_camera_model(self):
         self.camera_model_publisher.publish(String(data=self.wrist_cameras.active))
 
-    def _camera_parameter_callback(self, parameters):
+    def _set_tcp_marker_visible_locked(self, visible):
+        if self.tcp_site_id >= 0:
+            self.model.site_rgba[self.tcp_site_id, 3] = 0.3 if visible else 0.0
+
+    def _publish_tcp_marker_visible(self):
+        self.tcp_marker_publisher.publish(Bool(data=self.show_tcp_marker))
+
+    def _visual_parameter_callback(self, parameters):
         selected = [p.value for p in parameters if p.name == "wrist_camera_model"]
-        if not selected:
+        tcp_selected = [p for p in parameters if p.name == "show_tcp_marker"]
+        if not selected and not tcp_selected:
             return SetParametersResult(successful=True)
-        name = selected[-1]
-        if name not in CAMERA_MODELS:
+        if selected and selected[-1] not in CAMERA_MODELS:
             return SetParametersResult(successful=False,
                                        reason="Choose d405, d435i, gemini2 or uvc32")
+        if tcp_selected and tcp_selected[-1].type_ != Parameter.Type.BOOL:
+            return SetParametersResult(successful=False,
+                                       reason="show_tcp_marker must be a boolean")
+        if tcp_selected and tcp_selected[-1].value and self.tcp_site_id < 0:
+            return SetParametersResult(successful=False,
+                                       reason="TCP site not found in this model")
         viewer_lock = self.viewer.lock() if self.viewer is not None else nullcontext()
         with viewer_lock:
-            self.wrist_cameras.select(name)
-            mujoco.mj_forward(self.model, self.data)
+            if selected:
+                self.wrist_cameras.select(selected[-1])
+                mujoco.mj_forward(self.model, self.data)
+            if tcp_selected:
+                self.show_tcp_marker = tcp_selected[-1].value
+                self._set_tcp_marker_visible_locked(self.show_tcp_marker)
         if self.viewer is not None and self.viewer.is_running():
             self.viewer.sync()
-        self._publish_camera_model()
-        self.get_logger().info(f"Wrist camera switched to {self.wrist_cameras.label}")
+        if selected:
+            self._publish_camera_model()
+            self.get_logger().info(f"Wrist camera switched to {self.wrist_cameras.label}")
+        if tcp_selected:
+            self._publish_tcp_marker_visible()
         return SetParametersResult(successful=True)
 
     def _vector_parameter(self, name: str) -> np.ndarray:
@@ -355,6 +394,13 @@ class RsMujocoSync(Node):
         return float(ratio * _MUJOCO_GRIPPER_OPEN_M)
 
     def _update(self) -> None:
+        if self._pending_tcp_toggle:
+            count = self._pending_tcp_toggle
+            self._pending_tcp_toggle -= count
+            if count % 2:
+                self.set_parameters([
+                    Parameter("show_tcp_marker", value=not self.show_tcp_marker)
+                ])
         if self._pending_camera_cycle:
             count = self._pending_camera_cycle
             self._pending_camera_cycle -= count

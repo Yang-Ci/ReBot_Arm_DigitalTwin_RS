@@ -260,6 +260,9 @@
       <geometry>
         <mesh filename="../meshes/mounts/D435_Gemini2_Mount.stl" scale="0.001 0.001 0.001" />
       </geometry>
+      <material name="camera_mount_black">
+        <color rgba="0.035 0.035 0.04 1" />
+      </material>
     </visual>
   </link>
   <joint name="gripper_to_mount" type="fixed">

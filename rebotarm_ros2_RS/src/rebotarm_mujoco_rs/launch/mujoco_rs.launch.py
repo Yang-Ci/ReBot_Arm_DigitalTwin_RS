@@ -19,6 +19,7 @@ def generate_launch_description():
             DeclareLaunchArgument("smoothing_alpha", default_value="1.0"),
             DeclareLaunchArgument("stale_timeout", default_value="1.0"),
             DeclareLaunchArgument("use_viewer", default_value="false"),
+            DeclareLaunchArgument("show_tcp_marker", default_value="false"),
             DeclareLaunchArgument("enable_camera_selector", default_value=LaunchConfiguration("use_viewer")),
             DeclareLaunchArgument("gripper_kp", default_value="1800.0"),
             DeclareLaunchArgument("gripper_kd", default_value="18.0"),
@@ -49,6 +50,9 @@ def generate_launch_description():
                         ),
                         "use_viewer": ParameterValue(
                             LaunchConfiguration("use_viewer"), value_type=bool
+                        ),
+                        "show_tcp_marker": ParameterValue(
+                            LaunchConfiguration("show_tcp_marker"), value_type=bool
                         ),
                         "gripper_kp": ParameterValue(
                             LaunchConfiguration("gripper_kp"), value_type=float

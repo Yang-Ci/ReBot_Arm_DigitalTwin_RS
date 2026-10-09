@@ -99,6 +99,11 @@ REBOTARM_MUJOCO_MODE=kinematic ./rebotarm start rs_sim
 
 视觉抓取必须使用默认 `physics` 模式。
 
+夹爪上的 TCP 红点只是末端位置辅助标记，不参与碰撞或物理仿真，也不影响抓放 IK。
+默认隐藏；可在相机选择窗口勾选“显示 TCP 红点”，或在 MuJoCo 窗口按 `T` 切换显示/隐藏。
+ROS 相机画面保持隐藏该标记。也可以通过
+`ros2 param set /rebotarm_rs_mujoco show_tcp_marker true` 显示，改为 `false` 隐藏。
+
 ## 5. 启动和连接网页
 
 终端 2：

@@ -29,6 +29,26 @@ ros2 launch rebotarm_mujoco_rs mujoco_rs.launch.py \
   arm_namespace:=rebotarm_rs simulation_mode:=physics use_viewer:=true
 ```
 
+## TCP marker visibility
+
+The red `tcp` site is an optional position marker attached to `gripper_end`.
+It has no collision or dynamics role. Task IK uses its configured body and
+offset independently. The marker is hidden by default, including in ROS camera
+images. In the selection window, check **Show TCP marker**, or press **T** in
+the MuJoCo viewer to show/hide it. The checkbox follows keyboard changes.
+This changes only the marker's opacity and preserves simulation state.
+
+Direct ROS launch supports `show_tcp_marker:=true`. To toggle it while running:
+
+```bash
+ros2 param set /rebotarm_rs_mujoco show_tcp_marker true
+ros2 param set /rebotarm_rs_mujoco show_tcp_marker false
+```
+
+The viewer publishes the current setting on the transient-local
+`/<arm_namespace>/mujoco/tcp_marker_visible` topic. This display option applies
+to the native viewer; ROS camera images keep the marker hidden.
+
 ## Wrist camera selection
 
 With `use_viewer:=true`, a small **MuJoCo · Wrist Camera** selection window opens

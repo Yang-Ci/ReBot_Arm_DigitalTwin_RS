@@ -53,11 +53,11 @@
     <material name="rs_seeed_green_mat" rgba="0.725 0.835 0.118 1" specular="0.22" shininess="0.26" metallic="0.18" roughness="0.34" />
     <!-- BEGIN GENERATED WRIST CAMERA ASSETS -->
     <mesh name="wrist_mounts_D405_305_Mount" file="wrist_mounts_D405_305_Mount.stl" scale="0.001 0.001 0.001" />
-    <material name="wrist_d405_camera_mount_link_0_0_mat" rgba="0.7 0.73 0.75 1" specular="0.35" shininess="0.5" />
+    <material name="wrist_d405_camera_mount_link_0_0_mat" rgba="0.035 0.035 0.04 1" specular="0.35" shininess="0.5" />
     <mesh name="wrist_realsense_d405" file="wrist_realsense_d405.stl" scale="0.001 0.001 0.001" />
     <material name="wrist_d405_camera_link_0_0_mat" rgba="0.7 0.73 0.75 1" specular="0.35" shininess="0.5" />
     <mesh name="wrist_mounts_D435_Gemini2_Mount" file="wrist_mounts_D435_Gemini2_Mount.stl" scale="0.001 0.001 0.001" />
-    <material name="wrist_d435i_camera_mount_link_0_0_mat" rgba="0.7 0.73 0.75 0" specular="0.35" shininess="0.5" />
+    <material name="wrist_d435i_camera_mount_link_0_0_mat" rgba="0.035 0.035 0.04 0" specular="0.35" shininess="0.5" />
     <mesh name="wrist_d435i_body_00" file="wrist_d435i_body_00.stl" scale="1 1 1" />
     <material name="wrist_d435i_camera_link_0_0_mat" rgba="0.74902 0.74902 0.74902 0" specular="0.35" shininess="0.5" />
     <mesh name="wrist_d435i_body_01" file="wrist_d435i_body_01.stl" scale="1 1 1" />
@@ -114,9 +114,9 @@
     <material name="wrist_gemini2_camera_left_ir_optical_frame_0_0_mat" rgba="0.792156862745 0.819607843137 0.933333333333 0" specular="0.35" shininess="0.5" />
     <mesh name="wrist_gemini2_camera_depth_frame" file="wrist_gemini2_camera_depth_frame.stl" scale="1 1 1" />
     <material name="wrist_gemini2_camera_depth_frame_0_0_mat" rgba="0.792156862745 0.819607843137 0.933333333333 0" specular="0.35" shininess="0.5" />
-    <material name="wrist_gemini2_camera_mount_link_0_0_mat" rgba="0.7 0.73 0.75 0" specular="0.35" shininess="0.5" />
+    <material name="wrist_gemini2_camera_mount_link_0_0_mat" rgba="0.035 0.035 0.04 0" specular="0.35" shininess="0.5" />
     <mesh name="wrist_mounts_UVC32_mount" file="wrist_mounts_UVC32_mount.stl" scale="0.001 0.001 0.001" />
-    <material name="wrist_uvc32_camera_mount_link_0_0_mat" rgba="0.7 0.73 0.75 0" specular="0.35" shininess="0.5" />
+    <material name="wrist_uvc32_camera_mount_link_0_0_mat" rgba="0.035 0.035 0.04 0" specular="0.35" shininess="0.5" />
     <mesh name="wrist_uvc32_board" file="wrist_uvc32_board.stl" scale="0.001 0.001 0.001" />
     <material name="wrist_uvc32_camera_link_0_0_mat" rgba="0.06 0.32 0.14 0" specular="0.35" shininess="0.5" />
     <mesh name="wrist_uvc32_lens" file="wrist_uvc32_lens.stl" scale="0.001 0.001 0.001" />
@@ -219,7 +219,8 @@
                     <geom name="gripper_palm_collision" pos="0 0 0" rgba="0 0 0 0" group="3"
                           contype="1" conaffinity="1" condim="6" type="mesh" mesh="gripper_end"
                           friction="1.2 0.10 0.02" solref="0.002 1" solimp="0.98 0.995 0.0005" />
-                    <site name="tcp" pos="0 0 0" size="0.01" rgba="1 0 0 0.3" group="2"/>
+                    <!-- Optional TCP position marker; hidden until explicitly enabled. -->
+                    <site name="tcp" pos="0 0 0" size="0.01" rgba="1 0 0 0" group="2"/>
                     <!-- 夹爪驱动关节：通过 equality 与 joint_left / joint_right 联动。
                          axis="0 1 0" 沿 gripper_end 局部 -Y，即世界 Y 负方向，
                          因此 joint7 增大时 left 向 -Y、right 向 +Y 张开。 -->

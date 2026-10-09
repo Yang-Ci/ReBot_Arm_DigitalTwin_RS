@@ -45,7 +45,16 @@
           done(null, failure);
         };
         if (/\.dae$/i.test(url)) {
-          new THREE.ColladaLoader(loadingManager).load(url, (dae) => done(dae.scene), undefined, onError);
+          new THREE.ColladaLoader(loadingManager).load(url, (dae) => {
+            // The bundled D435 mesh has positions only. Without normals its
+            // Lambert material renders black instead of showing surface relief.
+            dae.scene.traverse((child) => {
+              if (child.isMesh && !child.geometry.getAttribute('normal')) {
+                child.geometry.computeVertexNormals();
+              }
+            });
+            done(dae.scene);
+          }, undefined, onError);
         } else {
           new THREE.STLLoader(loadingManager).load(url, (geometry) => {
             done(new THREE.Mesh(geometry, new THREE.MeshPhongMaterial()));
