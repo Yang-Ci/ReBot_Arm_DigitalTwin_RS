@@ -1477,7 +1477,7 @@ class HardwareManager:
             raise RuntimeError("leader needs an enabled MIT follower")
         if self.state_machine != "IDLE" or self.motion_active():
             raise RuntimeError(f"follower is busy: {self.state_machine}; stop other motion first")
-        if self.has_gripper and (self._gripper_manual_free or self._gripper_assist_active):
+        if self.has_gripper and self._gripper_assist_active:
             raise RuntimeError("return gripper to position hold before starting leader")
         if time.monotonic() - self._feedback_refreshed_at > 0.5:
             raise RuntimeError("follower feedback is stale")

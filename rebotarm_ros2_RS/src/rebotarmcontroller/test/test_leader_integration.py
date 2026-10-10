@@ -273,7 +273,7 @@ class LeaderIntegrationTests(unittest.TestCase):
         hw._mit_gripper_target = 5.0
         hw._mit_gripper_vlim = 3.0
         hw._endpos_ctrl._gripper_target = 1.0
-        hw._gripper_manual_free = hw._gripper_assist_active = False
+        hw._gripper_assist_active = False
         hw._gripper_mit_kp, hw._gripper_mit_kd = np.array([12.0]), np.array([0.05])
         gripper_sent = []
         hw._gripper_group = SimpleNamespace(
