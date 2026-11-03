@@ -24,7 +24,7 @@ class RsSceneDetector(Node):
 
     def __init__(self) -> None:
         super().__init__("rebotarm_rs_scene_detector")
-        self.declare_parameter("arm_namespace", "rebotarm_rs")
+        self.declare_parameter("arm_namespace", "rebot_arm_rs_sim")
         self.declare_parameter("object_states_topic", "")
         self.declare_parameter("detections_topic", "")
         self.declare_parameter("target_pose_topic", "")

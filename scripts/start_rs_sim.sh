@@ -10,7 +10,8 @@ REBOTARM_SIM_LOCK=/tmp/rebotarm_rs_sim.lock
 if [[ "${1:-}" == "--force" || "${1:-}" == "-f" ]]; then
   echo "Force-cleaning stale RS simulation processes..." >&2
   fuser -k "${REBOTARM_SIM_LOCK}" 2>/dev/null || true
-  pkill -f 'rebotarm_rs' 2>/dev/null || true
+  # Match the complete simulation namespace: /rebot_arm_rs is real hardware.
+  pkill -f 'arm_namespace:=rebot_arm_rs_sim([[:space:]]|$)' 2>/dev/null || true
   sleep 1
   rm -f "${REBOTARM_SIM_LOCK}"
 fi
@@ -56,12 +57,13 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 setsid ros2 launch rebotarm_bringup fake_rs_bringup.launch.py \
-  arm_namespace:=rebotarm_rs \
+  arm_namespace:=rebot_arm_rs_sim \
+  max_joint_speed:="${REBOTARM_SIM_MAX_JOINT_SPEED:-0.0}" \
   use_rviz:="${REBOTARM_USE_RVIZ:-false}" 9>&- &
 REBOTARM_CHILD_PIDS+=("$!")
 
 setsid ros2 launch rebotarm_mujoco_rs mujoco_rs.launch.py \
-  arm_namespace:=rebotarm_rs \
+  arm_namespace:=rebot_arm_rs_sim \
   simulation_mode:="${REBOTARM_MUJOCO_MODE:-physics}" \
   wrist_camera_model:="${REBOTARM_WRIST_CAMERA_MODEL:-d405}" \
   enable_camera_selector:="${REBOTARM_CAMERA_SELECTOR:-${REBOTARM_MUJOCO_VIEWER:-true}}" \
@@ -73,7 +75,7 @@ if [[ "${REBOTARM_START_AGENT:-true}" == "true" ]]; then
     echo "Reusing the MCP agent already listening on port 8081."
   else
     setsid ros2 launch rebotarm_agent rebotarm_mcp.launch.py \
-      arm_namespace:=rebotarm_rs \
+      arm_namespace:=rebot_arm_rs_sim \
       motion_mode:=allow \
       host:=127.0.0.1 \
       port:=8081 9>&- &
@@ -89,13 +91,14 @@ else
   REBOTARM_CHILD_PIDS+=("$!")
 fi
 
-echo "RS simulation: /rebotarm_rs"
+echo "RS simulation: /rebot_arm_rs_sim"
+echo "Fake driver joint speed limit: ${REBOTARM_SIM_MAX_JOINT_SPEED:-0.0} rad/s (0 = disabled)"
 echo "MuJoCo mode: ${REBOTARM_MUJOCO_MODE:-physics}"
 echo "MuJoCo viewer: ${REBOTARM_MUJOCO_VIEWER:-true}"
 echo "Wrist camera: ${REBOTARM_WRIST_CAMERA_MODEL:-d405} (press C in MuJoCo to switch)"
-echo "MuJoCo state: /rebotarm_rs/mujoco/joint_states"
-echo "Object states: /rebotarm_rs/mujoco/object_states"
-echo "Color detections: /rebotarm_rs/vision/color_blocks/detections"
+echo "MuJoCo state: /rebot_arm_rs_sim/mujoco/joint_states"
+echo "Object states: /rebot_arm_rs_sim/mujoco/object_states"
+echo "Color detections: /rebot_arm_rs_sim/vision/color_blocks/detections"
 if [[ "${REBOTARM_START_AGENT:-true}" == "true" ]]; then
   echo "MCP grasp agent: http://127.0.0.1:8081/mcp"
 fi

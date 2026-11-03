@@ -58,7 +58,7 @@ REBOTARM_RS_HARDWARE_CONFIRM=I_UNDERSTAND_RS_WILL_MOVE ./rebotarm start rs
 ./rebotarm start web
 ```
 
-网页选 ROS / RS 真机（/rebotarm），连接、打开 ROS 控制锁，确保从臂已使能、IDLE。夹爪若卸力/辅助，先恢复位置保持。关闭手势跟随；若先前有滑块/轨迹动作，先停止，再用现有“使能”恢复空闲保持。
+网页选 ROS / RS 真机（/rebot_arm_rs），连接、打开 ROS 控制锁，确保从臂已使能、IDLE。夹爪若卸力/辅助，先恢复位置保持。关闭手势跟随；若先前有滑块/轨迹动作，先停止，再用现有“使能”恢复空闲保持。
 主臂/从臂留出运动空间，不要同时运行直接控制同一 can0 的 LeRobot 遥操作。
 
 ## 4. 首轮测试
@@ -95,7 +95,7 @@ REBOTARM_RS_HARDWARE_CONFIRM=I_UNDERSTAND_RS_WILL_MOVE ./rebotarm start rs
 
 ```bash
 source scripts/rs_env.sh
-ros2 topic echo /rebotarm/leader/status
+ros2 topic echo /rebot_arm_rs/leader/status
 ```
 
 记录七项角度、采样 Hz/延迟、方向、夹爪端点、暂停/拔 USB/网页断线时延及终端报错。本地覆盖 mock 和控制策略，真实硬件尚未验收。

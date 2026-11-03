@@ -12,8 +12,8 @@
 |---|---|---|
 | 网页控制台 | `http://localhost:3002` | 3D、关节、夹爪、视觉和 AI 操作 |
 | rosbridge | `ws://localhost:9090` | 网页与 ROS 2 通信 |
-| RS 仿真 | `/rebotarm_rs` | Fake Driver 和 MuJoCo |
-| RS 真机 | `/rebotarm` | RobStride/SocketCAN 控制 |
+| RS 仿真 | `/rebot_arm_rs_sim` | Fake Driver 和 MuJoCo |
+| RS 真机 | `/rebot_arm_rs` | RobStride/SocketCAN 控制 |
 | MCP Agent | `http://127.0.0.1:8081/mcp` | 机械臂工具和抓取任务 |
 | text-agent | `http://127.0.0.1:8082` | 网页自然语言助手 |
 
@@ -76,7 +76,7 @@ cd /home/robot/ReBot_Arm_DigitalTwin_RS
 rosbridge。看到以下信息表示主要服务已启动：
 
 ```text
-RS simulation: /rebotarm_rs
+RS simulation: /rebot_arm_rs_sim
 MuJoCo mode: physics
 MCP grasp agent: http://127.0.0.1:8081/mcp
 rosbridge: ws://0.0.0.0:9090
@@ -92,6 +92,9 @@ REBOTARM_MUJOCO_VIEWER=false ./rebotarm start rs_sim
 
 # 仅运动学跟随；没有物体接触，不能验证物理抓取
 REBOTARM_MUJOCO_MODE=kinematic ./rebotarm start rs_sim
+
+# 对比使用 Fake Driver 关节限速 1 rad/s（默认 0 为关闭限速）
+REBOTARM_SIM_MAX_JOINT_SPEED=1.0 ./rebotarm start rs_sim
 
 # 确认没有有效任务后，清理残留仿真并重启
 ./rebotarm start rs_sim --force
@@ -115,7 +118,7 @@ cd /home/robot/ReBot_Arm_DigitalTwin_RS
 
 浏览器打开 `http://localhost:3002`，然后：
 
-1. 控制目标选择“RS 仿真（`/rebotarm_rs`）”；
+1. 控制目标选择“RS 仿真（`/rebot_arm_rs_sim`）”；
 2. ROS WebSocket 填写 `ws://localhost:9090`；
 3. 点击连接，等待状态显示在线；
 4. 仿真 Fake Driver 会自动允许网页控制。
@@ -133,9 +136,9 @@ ws://192.168.1.20:9090
 
 - J1–J6 控制六个机械臂关节；
 - J7/夹爪以开口宽度显示，命令范围约 `0–71.5 mm`；
-- 仿真网页模型由 MuJoCo 实际反馈驱动；
+- 仿真模式默认开启状态镜像，网页模型和姿态预设跟随 MuJoCo 实际反馈；可用“镜像 RS MuJoCo 实际状态到网页”开关关闭镜像；
 - 真机模式中实线模型表示测量反馈，半透明模型表示命令目标；目标到位或等待超时后，半透明鬼影会自动隐藏；
-- 网页速度范围为 `0.05–1.50 rad/s`，真机首次使用建议 `0.2–0.4 rad/s`。
+- 真机模式可设置网页关节速度上限，范围为 `0.05–1.50 rad/s`，首次使用建议 `0.2–0.4 rad/s`；仿真模式隐藏此面板。
 - 姿态预设之间使用统一的 30 Hz smoothstep 轨迹，并根据最大关节变化自动延长时间；夹爪按同一时间线渐变。
 
 ### 6.2 Pose 和 IK
@@ -180,7 +183,7 @@ Pose 输入单位是米：X 向前、Y 向左、Z 向上。输入目标和时长
 
 ### 7.2 视觉抓取流程
 
-点击“视觉抓取”后系统串行执行：
+点击“抓取入仓”后系统串行执行：
 
 1. 锁定本次颜色；
 2. 夹爪打开，同时机械臂走安全高位路线；
@@ -189,7 +192,15 @@ Pose 输入单位是米：X 向前、Y 向左、Z 向上。输入目标和时长
 5. 闭合夹爪并等待接触稳定；
 6. 先执行离桌抬升；
 7. 通过视觉确认物体确实升高；
-8. 进入安全中转高度。
+8. 进入安全中转高度并移动到对应颜色的收纳区；
+9. 仿真中按物体实际位置对准，确认物体稳定接触桌面后缓慢松爪，再抬起夹爪。
+
+仿真放置时如果缺少实时反馈、无法确认桌面接触或放置位姿不可达，流程会停止并在 ROS
+实时日志中说明原因。松爪时物体仍可能因仿真中的接触和重力产生少量位移，日志会显示
+松爪期间的位移和最终落点偏差。
+
+仿真中再次抓取已放入收纳区的同一物体时，会采用适合该位置的抓取姿态；如果目标姿态
+不可达，流程会停止并在 ROS 实时日志中说明原因。
 
 动作中再次点击不会启动并发 ROS 请求。页面会显示“已排队下一步”，当前动作结束后只
 执行最后一次排队请求，避免 rosbridge 服务调用超时。
@@ -217,10 +228,12 @@ MuJoCo 手指内侧包含不可见的薄碰撞垫，用于提高接触稳定性�
 
 ```bash
 cd /home/robot/ReBot_Arm_DigitalTwin_RS
-export DASHSCOPE_API_KEY='替换成你的 Key'
-export REBOTARM_LLM_MODEL='qwen-plus'
+export DEEPSEEK_API_KEY='替换成你的 Key'
 ./scripts/start_rs_text_agent.sh
 ```
+
+默认使用 DeepSeek `deepseek-flash`。如需切换到其他 OpenAI 兼容服务，设置
+`REBOTARM_LLM_BASE_URL`、`REBOTARM_LLM_MODEL` 和 `REBOTARM_LLM_API_KEY` 后再启动。
 
 不要把真实 Key 写入仓库。看到下面的日志表示 8082 已启动：
 
@@ -302,7 +315,7 @@ REBOTARM_RS_HARDWARE_CONFIRM=I_UNDERSTAND_RS_WILL_MOVE \
 ./rebotarm start web
 ```
 
-网页选择“RS 真机（`/rebotarm`）”，连接 `ws://localhost:9090`，打开控制锁并使能。将速度
+网页选择“RS 真机（`/rebot_arm_rs`）”，连接 `ws://localhost:9090`，打开控制锁并使能。将速度
 限制设为 `0.2–0.4 rad/s`，先小幅移动一个关节，确认方向和反馈一致后再测试其他动作。
 
 真机控制器只用 `Ctrl+C` 停止，不要使用 `Ctrl+Z`。启动脚本会处理异常残留控制器，避免
@@ -316,7 +329,7 @@ REBOTARM_RS_HARDWARE_CONFIRM=I_UNDERSTAND_RS_WILL_MOVE \
 ./scripts/start_rs_mujoco_follow.sh
 ```
 
-该脚本只订阅 `/rebotarm/joint_states` 做运动学显示，不打开 SocketCAN，也不向真机发送
+该脚本只订阅 `/rebot_arm_rs/joint_states` 做运动学显示，不打开 SocketCAN，也不向真机发送
 力矩命令。
 
 ## 10. 停止和恢复
@@ -346,9 +359,9 @@ ros2 node list
 ### 视觉按钮没有动作
 
 ```bash
-ros2 topic echo /rebotarm_rs/vision/color_blocks/detections --once
-ros2 topic echo /rebotarm_rs/mujoco/object_states --once
-ros2 service list | grep rebotarm_rs
+ros2 topic echo /rebot_arm_rs_sim/vision/color_blocks/detections --once
+ros2 topic echo /rebot_arm_rs_sim/mujoco/object_states --once
+ros2 service list | grep /rebot_arm_rs_sim/
 ```
 
 确认 MuJoCo 是 `physics` 模式。按钮显示已排队时等待当前串行动作结束。

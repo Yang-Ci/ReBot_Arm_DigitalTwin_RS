@@ -19,14 +19,14 @@ def generate_launch_description():
                 "base_url",
                 default_value=EnvironmentVariable(
                     "REBOTARM_LLM_BASE_URL",
-                    default_value="https://api.openai.com/v1",
+                    default_value="https://api.deepseek.com",
                 ),
             ),
             DeclareLaunchArgument(
                 "model",
                 default_value=EnvironmentVariable(
                     "REBOTARM_LLM_MODEL",
-                    default_value="gpt-4.1-mini",
+                    default_value="deepseek-flash",
                 ),
             ),
             DeclareLaunchArgument("timeout_sec", default_value="60"),

@@ -3,7 +3,7 @@
 ## 1. 适用范围与安全边界
 
 本工程同时包含网页、ROS 2、RS 真机驱动、MuJoCo、视觉和抓取 Agent。仿真与真机使用
-不同命名空间：仿真默认 `/rebotarm_rs`，真机默认 `/rebotarm`。
+不同命名空间：仿真默认 `/rebot_arm_rs_sim`，真机默认 `/rebot_arm_rs`。
 
 真机操作前必须满足：急停可触达、机械臂工作空间无人、CAN 连接稳定、机械零位已标定、
 负载已确认。第一次验证请降低网页 `vlim`，并一次只移动一个关节。`set_zero` 会修改电机
@@ -110,7 +110,7 @@ colcon build --symlink-install
 ./rebotarm start web
 ```
 
-打开 `http://localhost:3002`，选择 `/rebotarm_rs`。
+打开 `http://localhost:3002`，选择 `/rebot_arm_rs_sim`。
 
 常用仿真变量：
 
@@ -156,7 +156,7 @@ REBOTARM_RS_HARDWARE_CONFIRM=I_UNDERSTAND_RS_WILL_MOVE \
   ./rebotarm start rs
 ```
 
-另开终端运行网页，然后选择 `/rebotarm`：
+另开终端运行网页，然后选择 `/rebot_arm_rs`：
 
 ```bash
 ./rebotarm start web
@@ -199,8 +199,8 @@ REBOTARM_RS_HARDWARE_CONFIRM=I_UNDERSTAND_RS_WILL_MOVE ./rebotarm start rs
 
 这是开发调试工具，会在同一个 ROS Domain 中同时启动：
 
-- RS 真机驱动，命名空间 `/rebotarm`；
-- RS Fake Driver，命名空间 `/rebotarm_rs`；
+- RS 真机驱动，命名空间 `/rebot_arm_rs`；
+- RS Fake Driver，命名空间 `/rebot_arm_rs_sim`；
 - 一个 rosbridge，默认端口 9090。
 
 它用于对比同一网页/ROS 客户端在真机和 Fake Driver 上的接口、方向和状态差异。它不会
@@ -210,26 +210,26 @@ REBOTARM_RS_HARDWARE_CONFIRM=I_UNDERSTAND_RS_WILL_MOVE ./rebotarm start rs
 
 ## 9. ROS 接口
 
-以下用真机命名空间 `/rebotarm` 表示；仿真时替换为 `/rebotarm_rs`。
+以下用真机命名空间 `/rebot_arm_rs` 表示；仿真时替换为 `/rebot_arm_rs_sim`。
 
 ### 9.1 状态话题
 
 | 话题 | 类型 | 内容 |
 |---|---|---|
-| `/rebotarm/joint_states` | `sensor_msgs/msg/JointState` | 六轴和两个手指的统一状态 |
-| `/rebotarm/joints/<name>/state` | `rebotarm_msgs/msg/JointMotorState` | 单电机位置、速度、力矩、状态码 |
-| `/rebotarm/gripper/state` | `JointMotorState` | 夹爪电机原始角度状态 |
-| `/rebotarm/control_target` | `JointState` | 最终控制目标 |
-| `/rebotarm/control_reference` | `JointState` | 在线平滑参考；`effort` 携带参考加速度 |
-| `/rebotarm/arm_status` | `rebotarm_msgs/msg/ArmStatus` | 模式、使能、状态机和错误码，TRANSIENT_LOCAL |
+| `/rebot_arm_rs/joint_states` | `sensor_msgs/msg/JointState` | 六轴和两个手指的统一状态 |
+| `/rebot_arm_rs/joints/<name>/state` | `rebotarm_msgs/msg/JointMotorState` | 单电机位置、速度、力矩、状态码 |
+| `/rebot_arm_rs/gripper/state` | `JointMotorState` | 夹爪电机原始角度状态 |
+| `/rebot_arm_rs/control_target` | `JointState` | 最终控制目标 |
+| `/rebot_arm_rs/control_reference` | `JointState` | 在线平滑参考；`effort` 携带参考加速度 |
+| `/rebot_arm_rs/arm_status` | `rebotarm_msgs/msg/ArmStatus` | 模式、使能、状态机和错误码，TRANSIENT_LOCAL |
 
 ### 9.2 低层命令
 
 ```text
-/rebotarm/joints/<joint1..joint6>/cmd/mit      rebotarm_msgs/msg/JointMitCmd
-/rebotarm/joints/<joint1..joint6>/cmd/pos_vel  rebotarm_msgs/msg/JointPosVelCmd
-/rebotarm/gripper/cmd/mit                       rebotarm_msgs/msg/JointMitCmd
-/rebotarm/gripper/cmd/pos_vel                   rebotarm_msgs/msg/JointPosVelCmd
+/rebot_arm_rs/joints/<joint1..joint6>/cmd/mit      rebotarm_msgs/msg/JointMitCmd
+/rebot_arm_rs/joints/<joint1..joint6>/cmd/pos_vel  rebotarm_msgs/msg/JointPosVelCmd
+/rebot_arm_rs/gripper/cmd/mit                       rebotarm_msgs/msg/JointMitCmd
+/rebot_arm_rs/gripper/cmd/pos_vel                   rebotarm_msgs/msg/JointPosVelCmd
 ```
 
 网页真机模式默认使用 MIT。需要自行发布时，先检查 `arm_status.state_machine`；不要在
@@ -238,33 +238,33 @@ REBOTARM_RS_HARDWARE_CONFIRM=I_UNDERSTAND_RS_WILL_MOVE ./rebotarm start rs
 ### 9.3 服务
 
 ```text
-/rebotarm/enable
-/rebotarm/disable
-/rebotarm/safe_home
-/rebotarm/set_zero
-/rebotarm/gravity_compensation/start
-/rebotarm/gravity_compensation/stop
-/rebotarm/gravity_compensation/status
-/rebotarm/move_to_pose_ik
-/rebotarm/gripper/set
-/rebotarm/gripper/open
-/rebotarm/gripper/close
+/rebot_arm_rs/enable
+/rebot_arm_rs/disable
+/rebot_arm_rs/safe_home
+/rebot_arm_rs/set_zero
+/rebot_arm_rs/gravity_compensation/start
+/rebot_arm_rs/gravity_compensation/stop
+/rebot_arm_rs/gravity_compensation/status
+/rebot_arm_rs/move_to_pose_ik
+/rebot_arm_rs/gripper/set
+/rebot_arm_rs/gripper/open
+/rebot_arm_rs/gripper/close
 ```
 
 示例：
 
 ```bash
 source scripts/rs_env.sh
-ros2 service call /rebotarm/gravity_compensation/status std_srvs/srv/Trigger '{}'
-ros2 service call /rebotarm/safe_home std_srvs/srv/Trigger '{}'
+ros2 service call /rebot_arm_rs/gravity_compensation/status std_srvs/srv/Trigger '{}'
+ros2 service call /rebot_arm_rs/safe_home std_srvs/srv/Trigger '{}'
 ```
 
 ### 9.4 动作
 
 ```text
-/rebotarm/follow_joint_trajectory  control_msgs/action/FollowJointTrajectory
-/rebotarm/gripper/command          control_msgs/action/GripperCommand
-/rebotarm/move_to_pose             rebotarm_msgs/action/MoveToPose
+/rebot_arm_rs/follow_joint_trajectory  control_msgs/action/FollowJointTrajectory
+/rebot_arm_rs/gripper/command          control_msgs/action/GripperCommand
+/rebot_arm_rs/move_to_pose             rebotarm_msgs/action/MoveToPose
 ```
 
 真机 `FollowJointTrajectory` 会自动把过短段延长到不超过 0.60 rad/s。调用端必须等待动作
@@ -273,23 +273,22 @@ ros2 service call /rebotarm/safe_home std_srvs/srv/Trigger '{}'
 ## 10. MuJoCo 与 Agent 接口
 
 ```text
-/rebotarm_rs/mujoco/joint_states
-/rebotarm_rs/mujoco/object_states
-/rebotarm_rs/mujoco/overhead_rgb/image_raw
-/rebotarm_rs/vision/color_blocks/detections
-/rebotarm_rs/mujoco/reset
-/rebotarm_rs/mujoco/record/start
-/rebotarm_rs/mujoco/record/stop
-/rebotarm_rs/mujoco/record/replay
-/rebotarm_rs/mujoco/record/clear
+/rebot_arm_rs_sim/mujoco/joint_states
+/rebot_arm_rs_sim/mujoco/object_states
+/rebot_arm_rs_sim/mujoco/overhead_rgb/image_raw
+/rebot_arm_rs_sim/vision/color_blocks/detections
+/rebot_arm_rs_sim/mujoco/reset
+/rebot_arm_rs_sim/mujoco/record/start
+/rebot_arm_rs_sim/mujoco/record/stop
+/rebot_arm_rs_sim/mujoco/record/replay
+/rebot_arm_rs_sim/mujoco/record/clear
 ```
 
 MCP 默认地址：`http://127.0.0.1:8081/mcp`。不配置 LLM 也可以直接使用检测、IK、关节、
 抓取工具。启用自然语言网页：
 
 ```bash
-export DASHSCOPE_API_KEY='你的 Key'
-export REBOTARM_LLM_MODEL='qwen-plus'
+export DEEPSEEK_API_KEY='你的 Key'
 ./scripts/start_rs_text_agent.sh
 ```
 

@@ -11,6 +11,18 @@ RS 专用 MuJoCo 动力学场景、视觉检测、轨迹/IK 和 MCP 抓取 Agent
 - [RS 数据流与处理链](DATA_FLOW_RS_ZH.md)
 - [完整开发者手册](DEVELOPER_GUIDE_ZH.md)
 
+## ROS 命名空间
+
+| 控制目标 | 默认命名空间 | 网页反馈来源 |
+|---|---|---|
+| RS 真机 | `/rebot_arm_rs` | 真机 `/rebot_arm_rs/joint_states` |
+| RS 仿真 | `/rebot_arm_rs_sim` | 优先使用 `/rebot_arm_rs_sim/mujoco/joint_states` 的实际状态 |
+
+升级后先停止旧版真机、仿真和 Agent 进程，重新构建 ROS 工作区，再重启各服务并刷新网页。
+旧版真机的 `/rebotarm` 和仿真的 `/rebotarm_rs` 均已改名；外部脚本、ROS bag 录制配置和
+自定义订阅也要同步更新前缀。启动命令仍为 `./rebotarm start rs` 和 `./rebotarm start rs_sim`。
+只迁移 topic、service 和 action 的前缀，ROS 包名、节点名和示教文件格式保持原样。
+
 ## 功能
 
 - RS 真机：SocketCAN `can0`、MIT 125 Hz、关节/TCP/夹爪网页控制；
@@ -68,7 +80,7 @@ submodule 或嵌套 Git 仓库，一次普通 clone 即可取得完整构建输�
 ./rebotarm start web
 ```
 
-打开 `http://localhost:3002`，ROS 目标选择 `/rebotarm_rs`。
+打开 `http://localhost:3002`，ROS 目标选择 `/rebot_arm_rs_sim`。
 
 无窗口/运动学运行：
 
@@ -80,10 +92,10 @@ REBOTARM_MUJOCO_MODE=kinematic ./rebotarm start rs_sim
 仿真场景主要话题：
 
 ```text
-/rebotarm_rs/mujoco/joint_states
-/rebotarm_rs/mujoco/object_states
-/rebotarm_rs/mujoco/overhead_rgb/image_raw
-/rebotarm_rs/vision/color_blocks/detections
+/rebot_arm_rs_sim/mujoco/joint_states
+/rebot_arm_rs_sim/mujoco/object_states
+/rebot_arm_rs_sim/mujoco/overhead_rgb/image_raw
+/rebot_arm_rs_sim/vision/color_blocks/detections
 ```
 
 MCP 地址：`http://127.0.0.1:8081/mcp`。
@@ -106,7 +118,7 @@ REBOTARM_RS_HARDWARE_CONFIRM=I_UNDERSTAND_RS_WILL_MOVE \
   ./rebotarm start rs
 ```
 
-另开终端执行 `./rebotarm start web`，打开网页并选择 `/rebotarm`。首次测试建议把关节速度
+另开终端执行 `./rebotarm start web`，打开网页并选择 `/rebot_arm_rs`。首次测试建议把关节速度
 降到 0.2–0.4 rad/s，一次只动一个关节。
 
 真机驱动使用 `Ctrl+C` 停止，不要用 `Ctrl+Z`。如果上次控制器被暂停或异常残留，再次
@@ -140,7 +152,7 @@ RS Leader 夹爪参考速度为 `min(6 × 页面速度, control.leader_gripper_v
 ## 关键默认值
 
 ```text
-网页 vlim             1.2 rad/s（范围 0.05–1.5）
+真机网页 vlim         1.2 rad/s（范围 0.05–1.5）
 普通真机轨迹速度保护  0.60 rad/s（仅局部超速段延时）
 TCP 示教回放保护      1.20 rad/s（匹配实时拖拽）
 在线加速度限制        4 rad/s²
@@ -166,8 +178,7 @@ Fake Driver 状态      100 Hz
 启用自然语言 Agent：
 
 ```bash
-export DASHSCOPE_API_KEY='你的 Key'
-export REBOTARM_LLM_MODEL='qwen-plus'
+export DEEPSEEK_API_KEY='你的 Key'
 ./scripts/start_rs_text_agent.sh
 ```
 
@@ -185,8 +196,8 @@ REBOTARM_RS_HARDWARE_CONFIRM=I_UNDERSTAND_RS_WILL_MOVE ./rebotarm start rs
 ```
 
 日常使用统一通过 `rebotarm` 入口。`scripts/setup_rs_workspace.sh` 是一键安装脚本内部使用的
-ROS 工作区构建器；`scripts/start_rs_dual.sh` 仅用于同时启动真机 `/rebotarm` 和 Fake Driver
-`/rebotarm_rs` 做接口对照，不包含完整 MuJoCo 场景。
+ROS 工作区构建器；`scripts/start_rs_dual.sh` 仅用于同时启动真机 `/rebot_arm_rs` 和 Fake Driver
+`/rebot_arm_rs_sim` 做接口对照，不包含完整 MuJoCo 场景。
 
 ## 开发验证
 
@@ -207,6 +218,7 @@ bash -n setup.sh rebotarm scripts/*.sh
 node --check reBotArm_simulator-RS/server.js
 node --check reBotArm_simulator-RS/public/js/ros/rebot-ros-ui.js
 node --check reBotArm_simulator-RS/public/js/rebot-sim.js
+node reBotArm_simulator-RS/scripts/ros-namespaces.test.js
 ```
 
 ## 本地源码维护

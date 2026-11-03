@@ -66,7 +66,7 @@ class RsMujocoSync(Node):
     def __init__(self) -> None:
         super().__init__("rebotarm_rs_mujoco")
 
-        self.declare_parameter("arm_namespace", "rebotarm_rs")
+        self.declare_parameter("arm_namespace", "rebot_arm_rs_sim")
         self.declare_parameter("input_topic", "")
         self.declare_parameter("output_topic", "")
         self.declare_parameter("target_pose_topic", "")
@@ -546,15 +546,31 @@ class RsMujocoSync(Node):
         now = time.monotonic()
         if now - self.last_object_publish_time < self.object_publish_period:
             return
+        table_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "task_table")
+        supported = set()
+        for index in range(self.data.ncon):
+            contact = self.data.contact[index]
+            body_a = int(self.model.geom_bodyid[contact.geom1])
+            body_b = int(self.model.geom_bodyid[contact.geom2])
+            if body_a == table_id:
+                supported.add(body_b)
+            elif body_b == table_id:
+                supported.add(body_a)
         objects = []
         for name, body_id in self.object_body_ids.items():
             quat_wxyz = [float(value) for value in self.data.xquat[body_id]]
+            velocity = np.zeros(6, dtype=np.float64)
+            mujoco.mj_objectVelocity(
+                self.model, self.data, mujoco.mjtObj.mjOBJ_BODY, body_id, velocity, 0
+            )
             objects.append(
                 {
                     "name": name,
                     "position": [float(value) for value in self.data.xpos[body_id]],
                     "quaternion": quat_wxyz,
                     "quat_wxyz": quat_wxyz,
+                    "table_contact": body_id in supported,
+                    "linear_speed_mps": float(np.linalg.norm(velocity[3:])),
                 }
             )
         msg = String()

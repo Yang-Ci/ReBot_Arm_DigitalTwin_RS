@@ -1,7 +1,7 @@
 # reBotArm RS Agent
 
 该包把 DM 版本的 MCP/Text Agent 接入 B601-RS 仿真接口。默认命名空间是
-`/rebotarm_rs`，运动工具默认保持锁定；仓库的 `start_rs_sim.sh` 只在安全仿真中
+`/rebot_arm_rs_sim`，运动工具默认保持锁定；仓库的 `start_rs_sim.sh` 只在安全仿真中
 使用 `motion_mode:=allow`。
 
 ## RS 适配
@@ -10,7 +10,9 @@
 - ROS RS 驱动内部使用夹爪电机位置 `0~5 rad`，Agent 会自动换算。
 - `pick_color` 使用 RS 专用 TCP 偏移、俯视姿态和抓取高度。
 - 抓取结果不是只看轨迹是否完成；MuJoCo 物体必须实际抬升至少 35 mm。
-- 颜色目标来自 `/rebotarm_rs/vision/color_blocks/detections`。
+- 颜色目标来自 `/rebot_arm_rs_sim/vision/color_blocks/detections`。
+- 仿真优先使用 MuJoCo 实际关节反馈；抓取前会检查检测数据的新鲜度。
+- 收纳区中的物体使用单独的可达抓取姿态，IK 不可达时停止。
 
 ## 启动
 
@@ -32,18 +34,19 @@ http://127.0.0.1:8081/mcp
 ```bash
 source scripts/rs_env.sh
 ros2 launch rebotarm_agent rebotarm_mcp.launch.py \
-  arm_namespace:=rebotarm_rs motion_mode:=allow
+  arm_namespace:=rebot_arm_rs_sim motion_mode:=allow
 ```
 
 启动供网页使用的 Text Agent/Dashboard：
 
 ```bash
-export DASHSCOPE_API_KEY="..."
-export REBOTARM_LLM_MODEL="qwen-plus"
+export DEEPSEEK_API_KEY="..."
 ./scripts/start_rs_text_agent.sh
 ```
 
 Dashboard 默认地址是 `http://localhost:8082`。
+默认使用 DeepSeek 的 `deepseek-flash`；如需其他 OpenAI 兼容服务，可设置
+`REBOTARM_LLM_BASE_URL`、`REBOTARM_LLM_MODEL` 和 `REBOTARM_LLM_API_KEY`。
 
 ## 主要工具
 
@@ -55,3 +58,4 @@ Dashboard 默认地址是 `http://localhost:8082`。
 - `record_start`、`record_stop`、`record_replay`：仿真动作录制回放。
 
 不启动 Text Agent 也可以通过任意 MCP 客户端直接调用这些工具。
+`pick_color` 成功后保持夹持，不会自动放入收纳区；网页“抓取入仓”是独立流程。

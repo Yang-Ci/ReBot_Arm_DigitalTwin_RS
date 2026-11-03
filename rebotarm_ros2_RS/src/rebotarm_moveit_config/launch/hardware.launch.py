@@ -51,7 +51,7 @@ def generate_launch_description():
     )
     arm_namespace_arg = DeclareLaunchArgument(
         "arm_namespace",
-        default_value="rebotarm",
+        default_value="rebot_arm_rs",
         description="Namespace used by an already-running reBotArmController",
     )
     model_arg = DeclareLaunchArgument(
@@ -76,7 +76,9 @@ def _launch_setup(context, *args, **kwargs):
     model = LaunchConfiguration("model").perform(context).strip().lower()
     if model != "rs":
         raise RuntimeError("This workspace contains only the RS model; use model:=rs")
-    arm_namespace = LaunchConfiguration("arm_namespace")
+    arm_namespace = LaunchConfiguration("arm_namespace").perform(context).strip("/")
+    if not arm_namespace:
+        raise RuntimeError("arm_namespace must not be empty")
 
     moveit_config = (
         MoveItConfigsBuilder("rebotarm", package_name="rebotarm_moveit_config")
@@ -98,13 +100,19 @@ def _launch_setup(context, *args, **kwargs):
     )
     apply_rviz_urdf_compat(moveit_config)
     moveit_params = moveit_parameters(moveit_config)
+    # The trajectory action must follow the same namespace as joint feedback.
+    controllers = moveit_params["moveit_simple_controller_manager"]
+    default_controller = controllers["controller_names"][0]
+    if arm_namespace != default_controller:
+        controllers[arm_namespace] = controllers.pop(default_controller)
+        controllers["controller_names"] = [arm_namespace]
 
     move_group_node = Node(
         package="moveit_ros_move_group",
         executable="move_group",
         output="screen",
         parameters=[moveit_params],
-        remappings=[("/joint_states", ["/", arm_namespace, "/joint_states"])],
+        remappings=[("/joint_states", f"/{arm_namespace}/joint_states")],
     )
 
     rviz_config = PathJoinSubstitution(
@@ -122,7 +130,7 @@ def _launch_setup(context, *args, **kwargs):
         arguments=["-d", rviz_config],
         condition=IfCondition(LaunchConfiguration("use_rviz")),
         parameters=[moveit_params],
-        remappings=[("/joint_states", ["/", arm_namespace, "/joint_states"])],
+        remappings=[("/joint_states", f"/{arm_namespace}/joint_states")],
     )
 
     static_tf_node = Node(
@@ -139,7 +147,7 @@ def _launch_setup(context, *args, **kwargs):
         name="robot_state_publisher",
         output="both",
         parameters=[moveit_config.robot_description],
-        remappings=[("/joint_states", ["/", arm_namespace, "/joint_states"])],
+        remappings=[("/joint_states", f"/{arm_namespace}/joint_states")],
     )
 
     return [

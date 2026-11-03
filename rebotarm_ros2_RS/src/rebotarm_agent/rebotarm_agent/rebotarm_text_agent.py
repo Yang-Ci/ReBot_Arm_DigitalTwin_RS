@@ -8,6 +8,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlparse
 from typing import Any
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -15,8 +16,8 @@ from fastmcp import Client
 
 
 DEFAULT_MCP_URL = "http://127.0.0.1:8081/mcp"
-DEFAULT_BASE_URL = "https://api.openai.com/v1"
-DEFAULT_MODEL = "gpt-4.1-mini"
+DEFAULT_BASE_URL = "https://api.deepseek.com"
+DEFAULT_MODEL = "deepseek-flash"
 MOTION_TOOLS = {
     "safe_home",
     "gravity_compensation_start",
@@ -104,6 +105,11 @@ class ChatCompletionsLLM:
             "tool_choice": "auto",
             "temperature": self.temperature,
         }
+        if urlparse(self.base_url).hostname == "api.deepseek.com":
+            # This client stores regular assistant/tool messages only. Disable
+            # thinking so DeepSeek does not require reasoning_content on each
+            # subsequent tool-call request.
+            payload["thinking"] = {"type": "disabled"}
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         request = urllib.request.Request(
             f"{self.base_url}/chat/completions",
@@ -628,12 +634,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--api-key",
-        default=(
-            os.getenv("REBOTARM_LLM_API_KEY")
-            or os.getenv("DASHSCOPE_API_KEY")
-            or os.getenv("OPENAI_API_KEY")
-            or ""
-        ),
+        default=None,
     )
     parser.add_argument(
         "--model",
@@ -671,6 +672,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="HTTP server bind port.",
     )
     args, _ros_args = parser.parse_known_args(argv)
+    if args.api_key is None:
+        host = urlparse(args.base_url).hostname or ""
+        provider_key = (
+            os.getenv("DEEPSEEK_API_KEY") if host == "api.deepseek.com" else
+            os.getenv("OPENAI_API_KEY") if host == "api.openai.com" else
+            os.getenv("DASHSCOPE_API_KEY") if host.endswith(".aliyuncs.com") else ""
+        )
+        args.api_key = os.getenv("REBOTARM_LLM_API_KEY") or provider_key or ""
     return args
 
 
@@ -683,7 +692,7 @@ def main(argv: list[str] | None = None) -> int:
         if not has_api_key and not is_local:
             print(
                 "[text-agent-http] WARNING: No API key set. /chat endpoint will return errors. "
-                "Set REBOTARM_LLM_API_KEY, DASHSCOPE_API_KEY, or OPENAI_API_KEY to enable LLM chat. "
+                "Set DEEPSEEK_API_KEY or REBOTARM_LLM_API_KEY to enable LLM chat. "
                 "Dashboard, /tools and /call_tool work without an API key.",
                 file=sys.stderr,
             )
@@ -695,7 +704,7 @@ def main(argv: list[str] | None = None) -> int:
     # REPL mode: API key required
     if not has_api_key and not is_local:
         print(
-            "Missing API key. Set REBOTARM_LLM_API_KEY, DASHSCOPE_API_KEY, or OPENAI_API_KEY, "
+            "Missing API key. Set DEEPSEEK_API_KEY or REBOTARM_LLM_API_KEY, "
             "or point --base-url to a local OpenAI-compatible server.",
             file=sys.stderr,
         )
@@ -1295,11 +1304,6 @@ _HTTP_STATE: dict[str, Any] = {}
 
 async def _http_handle_chat(args: argparse.Namespace, payload: dict[str, Any]) -> dict[str, Any]:
     """Process a single chat turn over HTTP."""
-    if not args.api_key and "localhost" not in args.base_url and "127.0.0.1" not in args.base_url:
-        return {
-            "ok": False,
-            "error": "LLM API key not configured. Set REBOTARM_LLM_API_KEY, DASHSCOPE_API_KEY, or OPENAI_API_KEY. Tool listing and direct tool calls still work.",
-        }
     user_text = str(payload.get("text") or payload.get("message") or "").strip()
     reset = bool(payload.get("reset", False))
     if not user_text:
@@ -1352,6 +1356,9 @@ async def _http_handle_chat(args: argparse.Namespace, payload: dict[str, Any]) -
                         return {"ok": True, "text": _summarize_gripper(result), "events": events}
                     except ValueError:
                         pass
+
+        if not args.api_key and urlparse(args.base_url).hostname not in ("localhost", "127.0.0.1", "::1"):
+            return {"ok": False, "error": "LLM API key not configured. Set DEEPSEEK_API_KEY or REBOTARM_LLM_API_KEY."}
 
         llm = ChatCompletionsLLM(
             base_url=args.base_url,

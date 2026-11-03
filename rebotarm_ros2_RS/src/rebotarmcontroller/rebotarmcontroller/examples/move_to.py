@@ -16,7 +16,7 @@ from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
-_NAMESPACE = "rebotarm"
+_NAMESPACE = "rebot_arm_rs"
 
 
 def _duration_msg(seconds: float) -> Duration:

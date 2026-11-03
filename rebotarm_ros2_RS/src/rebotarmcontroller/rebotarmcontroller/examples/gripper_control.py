@@ -8,7 +8,7 @@ from rclpy.node import Node
 from rebotarm_msgs.srv import GripperCommand
 from std_srvs.srv import Trigger
 
-_NAMESPACE = "rebotarm"
+_NAMESPACE = "rebot_arm_rs"
 
 
 class DemoGripperControl(Node):

@@ -19,11 +19,11 @@ def detect_namespace():
     try:
         from ament_index_python.packages import get_package_share_directory
         get_package_share_directory("rebotarm_mujoco_rs")
-        return "rebotarm_rs"
+        return "rebot_arm_rs_sim"
     except Exception:
         pass
     if "Mujoco-RS" in os.getcwd():
-        return "rebotarm_rs"
+        return "rebot_arm_rs_sim"
     return "rebotarm"
 
 
@@ -60,7 +60,7 @@ def main():
     node = IKClient(ns)
 
     # 目标：红色方块上方
-    if ns == "rebotarm_rs":
+    if ns == "rebot_arm_rs_sim":
         node.solve(0.31, -0.09, 0.20)
     else:
         node.solve(0.34, -0.13, 0.20)

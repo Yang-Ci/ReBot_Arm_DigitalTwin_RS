@@ -44,12 +44,12 @@ class JointSliderGui(Node):
     def __init__(self) -> None:
         super().__init__("rebotarm_rs_joint_slider_gui")
 
-        self.declare_parameter("arm_namespace", "rebotarm_rs")
+        self.declare_parameter("arm_namespace", "rebot_arm_rs_sim")
         self.declare_parameter("publish_hz", 30.0)
         self.declare_parameter("gripper_open_position", 5.0)
 
         self.arm_namespace = str(
-            self.get_parameter("arm_namespace").value or "rebotarm_rs"
+            self.get_parameter("arm_namespace").value or "rebot_arm_rs_sim"
         ).strip("/")
         self.publish_hz = max(float(self.get_parameter("publish_hz").value), 1.0)
         self.gripper_open_position = max(

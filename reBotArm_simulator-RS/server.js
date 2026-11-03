@@ -164,8 +164,8 @@ function requestHandler(req, res) {
         closedMeters: 0,
         openMeters: 0.0715,
         visualOpenMeters: 0.05,
-        rosService: '/rebotarm/gripper/set',
-        simulationRosService: '/rebotarm_rs/gripper/set'
+        rosService: '/rebot_arm_rs/gripper/set',
+        simulationRosService: '/rebot_arm_rs_sim/gripper/set'
       },
       motorbridge: {
         defaultUrl: process.env.MOTORBRIDGE_WS_URL || 'ws://127.0.0.1:9002',
@@ -179,7 +179,7 @@ function requestHandler(req, res) {
       },
       safety: {
         hardwareReady: true,
-        note: 'Real hardware uses /rebotarm; the isolated Fake Driver uses /rebotarm_rs.'
+        note: 'Real hardware uses /rebot_arm_rs; the isolated Fake Driver uses /rebot_arm_rs_sim.'
       }
     });
     return;

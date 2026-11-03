@@ -50,12 +50,12 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 setsid ros2 launch rebotarm_bringup bringup.launch.py \
-  model:=rs channel:=can0 arm_namespace:=rebotarm \
+  model:=rs channel:=can0 arm_namespace:=rebot_arm_rs \
   ee_frame_id:=gripper_end use_rviz:="${REBOTARM_USE_RVIZ:-false}" 9>&- &
 REBOTARM_CHILD_PIDS+=("$!")
 
 setsid ros2 launch rebotarm_bringup fake_rs_bringup.launch.py \
-  arm_namespace:=rebotarm_rs use_rviz:=false 9>&- &
+  arm_namespace:=rebot_arm_rs_sim use_rviz:=false 9>&- &
 REBOTARM_CHILD_PIDS+=("$!")
 
 if command -v ss >/dev/null && ss -ltn | grep -qE '[:.]9090[[:space:]]'; then
@@ -66,7 +66,7 @@ else
   REBOTARM_CHILD_PIDS+=("$!")
 fi
 
-echo "RS hardware namespace: /rebotarm"
-echo "RS simulation namespace: /rebotarm_rs"
+echo "RS hardware namespace: /rebot_arm_rs"
+echo "RS simulation namespace: /rebot_arm_rs_sim"
 echo "rosbridge: ws://0.0.0.0:9090"
 wait

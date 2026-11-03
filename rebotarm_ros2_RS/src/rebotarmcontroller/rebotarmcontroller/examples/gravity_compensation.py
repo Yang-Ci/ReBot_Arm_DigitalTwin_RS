@@ -10,7 +10,7 @@ from rclpy.node import Node
 from rclpy.signals import SignalHandlerOptions
 from std_srvs.srv import Trigger
 
-_NAMESPACE = "rebotarm"
+_NAMESPACE = "rebot_arm_rs"
 
 
 def _call_trigger(

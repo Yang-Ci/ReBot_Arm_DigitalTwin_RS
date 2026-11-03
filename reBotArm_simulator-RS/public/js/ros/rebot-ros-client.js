@@ -3,7 +3,7 @@
     constructor(options) {
       super();
       this.url = options && options.url ? options.url : '';
-      this.namespace = options && options.namespace ? options.namespace : 'rebotarm';
+      this.namespace = options && options.namespace ? options.namespace : 'rebot_arm_rs';
       this.socket = null;
       this.connected = false;
       this.autoReconnect = true;

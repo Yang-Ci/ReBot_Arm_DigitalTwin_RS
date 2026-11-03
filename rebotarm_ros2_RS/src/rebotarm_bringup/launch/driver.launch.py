@@ -30,7 +30,7 @@ def generate_launch_description():
             DeclareLaunchArgument("joint_state_rate", default_value="100.0"),
             DeclareLaunchArgument("hardware_feedback_poll_rate", default_value="100.0"),
             DeclareLaunchArgument("cmd_arbitration", default_value="reject"),
-            DeclareLaunchArgument("arm_namespace", default_value="rebotarm"),
+            DeclareLaunchArgument("arm_namespace", default_value="rebot_arm_rs"),
             DeclareLaunchArgument("disable_after_safe_home", default_value="true"),
             Node(
                 package="rebotarmcontroller",

@@ -51,7 +51,7 @@ class RsTaskServer(Node):
         super().__init__("rebotarm_rs_task_server")
         self.callback_group = ReentrantCallbackGroup()
 
-        self.declare_parameter("arm_namespace", "rebotarm_rs")
+        self.declare_parameter("arm_namespace", "rebot_arm_rs_sim")
         self.declare_parameter("model_path", "")
         self.declare_parameter("joint_state_topic", "")
         self.declare_parameter("target_pose_topic", "")

@@ -59,7 +59,7 @@ ROS 参数 leader_joint_directions 为六项 ±1，用于装配方向修正；�
 
 ## 4. ROS 接口与代码
 
-真机命名空间 `/rebotarm`，仿真 `/rebotarm_rs`。
+真机命名空间 `/rebot_arm_rs`，仿真 `/rebot_arm_rs_sim`。
 
 - `/<ns>/leader/control`：LeaderControl，operation 为 scan/connect/unlock/calibrate/start/pause/resume/stop/disconnect/heartbeat。请求含 port、session_id、speed、follow_gripper、absolute、confirm_zero；响应含 success、message、session_id、devices。
 - `/<ns>/leader/status`：LeaderStatus，含状态、原因、端口、会话、校准/跟随/暂停标记、样本年龄/频率、七项主臂角度和六轴目标。

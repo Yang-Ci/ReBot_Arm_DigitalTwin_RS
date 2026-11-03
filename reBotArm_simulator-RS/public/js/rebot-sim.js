@@ -70,6 +70,7 @@
   let wristCamera;
   let ghostDisplayActive = false;
   let hardwareFeedbackDriven = false;
+  let simulationPresetFeedbackDriven = false;
   let gripperGroup;
   let ghostGripperGroup;
   let mujocoSceneGroup;
@@ -205,7 +206,7 @@
         stopPath();
         setGhostDisplay(false);
         const value = joint.unit === 'm' ? Number(range.value) / 1000 : Number(range.value) * DEG;
-        if (hardwareFeedbackDriven) {
+        if (hardwareFeedbackDriven || (joint.name === 'gripper' && simulationPresetFeedbackDriven)) {
           emitCommand({
             type: 'joint',
             name: joint.name,
@@ -222,7 +223,7 @@
       range.addEventListener('change', () => {
         setGhostDisplay(false);
         const value = joint.unit === 'm' ? Number(range.value) / 1000 : Number(range.value) * DEG;
-        if (hardwareFeedbackDriven) {
+        if (hardwareFeedbackDriven || (joint.name === 'gripper' && simulationPresetFeedbackDriven)) {
           emitCommand({
             type: 'joint',
             name: joint.name,
@@ -825,10 +826,9 @@
       next[joint.name] = clamp(joint.unit === 'm' ? raw / 1000 : raw * DEG, joint.min, joint.max);
     });
     const transitionDuration = immediate ? 1 : presetTransitionDurationMs(next);
-    // A hardware preset is a target, not a browser-side animation.  Keep the
-    // solid robot at measured feedback and show only the translucent target;
-    // ros/rebot-ros-ui.js will advance the solid robot as joint_states arrive.
-    if (!immediate && hardwareFeedbackDriven) {
+    // When connected feedback drives the robot, show the preset as a target
+    // and let measured joint positions move the solid model.
+    if (!immediate && (hardwareFeedbackDriven || simulationPresetFeedbackDriven)) {
       teachingPlayback = null;
       moveStart = 0;
       targetAngles = { ...next };
@@ -1266,7 +1266,7 @@
       // All intermediate commands have already been streamed.  This batch is
       // only the exact final endpoint; after publishing it, the solid model
       // must stay on measured feedback and the target ghost must not re-open.
-      handoffToFeedback: hardwareFeedbackDriven
+      handoffToFeedback: hardwareFeedbackDriven || simulationPresetFeedbackDriven
     });
     dragCommandAngles = null;
   }
@@ -2767,6 +2767,9 @@
       hardwareFeedbackDriven = Boolean(enabled);
       if (hardwareFeedbackDriven) setGhostDisplay(false);
     },
+    setSimulationPresetFeedbackDriven(enabled) {
+      simulationPresetFeedbackDriven = Boolean(enabled);
+    },
     isGhostVisible() {
       return Boolean(ghostRobot && ghostRobot.visible);
     },
@@ -2822,6 +2825,22 @@
       const pos = getTcpPosition(robot);
       if (!pos) return null;
       return threeToRos(pos);
+    },
+    getGraspTcpPosition(feedbackAngles) {
+      if (!robot) return null;
+      const link = robot.getObjectByName('gripper_end');
+      if (!link) return null;
+      const useFeedback = feedbackAngles && IKSolver.jointNames.every(
+        (name) => Number.isFinite(Number(feedbackAngles[name]))
+      );
+      try {
+        if (useFeedback) applyRobotAngles(robot, feedbackAngles);
+        link.updateMatrixWorld(true);
+        // Match the RS MuJoCo task server's tcp_offset in gripper_end coordinates.
+        return threeToRos(link.localToWorld(new THREE.Vector3(-0.04, 0, 0)));
+      } finally {
+        if (useFeedback) applyRobotAngles(robot, currentAngles);
+      }
     },
     stopMotion() {
       stopActiveMotion();

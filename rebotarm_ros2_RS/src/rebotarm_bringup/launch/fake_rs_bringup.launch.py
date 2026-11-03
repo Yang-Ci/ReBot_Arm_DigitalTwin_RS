@@ -29,9 +29,10 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
-            DeclareLaunchArgument("arm_namespace", default_value="rebotarm_rs"),
+            DeclareLaunchArgument("arm_namespace", default_value="rebot_arm_rs_sim"),
             DeclareLaunchArgument("joint_state_rate", default_value="100.0"),
-            DeclareLaunchArgument("max_joint_speed", default_value="1.0"),
+            DeclareLaunchArgument("max_joint_speed", default_value="1.0",
+                                  description="Fake driver joint speed in rad/s; 0 disables the limit"),
             DeclareLaunchArgument("max_gripper_speed", default_value="5.0"),
             DeclareLaunchArgument("start_enabled", default_value="true"),
             DeclareLaunchArgument("use_rviz", default_value="false"),

@@ -10,8 +10,8 @@ URDF/STL；目录内的 `description` 只作为网页被单独复制时的离线
 | --- | --- |
 | RS Three.js/URDF/STL | 可用 |
 | 可切换腕部相机 URDF | 无相机 / 32×32 UVC / RealSense D405 / RealSense D435i / Orbbec Gemini 2 |
-| RS ROS 2 Fake Driver | 可用，命名空间 `/rebotarm_rs` |
-| RS 真机 ROS 2 Controller | 可用，命名空间 `/rebotarm` |
+| RS ROS 2 Fake Driver | 可用，命名空间 `/rebot_arm_rs_sim` |
+| RS 真机 ROS 2 Controller | 可用，命名空间 `/rebot_arm_rs` |
 | 新版 `JointPosVelCmd`/`JointMitCmd` | 已适配 |
 | RS 夹爪宽度与电机角度换算 | 已适配，71.5 mm ↔ 5 rad |
 | RS MuJoCo 动力学 | 可用，启动脚本默认打开 Viewer 与 physics 模式 |
@@ -77,13 +77,13 @@ npm run build:pages
 ./scripts/start_rs_sim.sh
 ```
 
-网页填写 `ws://<Ubuntu-IP>:9090`，选择“RS 仿真（/rebotarm_rs）”。收到
+网页填写 `ws://<Ubuntu-IP>:9090`，选择“RS 仿真（/rebot_arm_rs_sim）”。收到
 `fake_rs_pos_vel` 状态后，网页会自动允许仿真控制。
 
 网页自然语言助手另开终端启动：
 
 ```bash
-export DASHSCOPE_API_KEY="你的 Key"
+export DEEPSEEK_API_KEY="你的 Key"
 ./scripts/start_rs_text_agent.sh
 ```
 
@@ -109,7 +109,7 @@ export REBOTARM_RS_HARDWARE_CONFIRM=I_UNDERSTAND_RS_WILL_MOVE
 ### 推动真机示教
 
 1. 启动 RS 真机 ROS 2 Controller 与 rosbridge，网页选择“RS 真机”。
-2. 连接 rosbridge，收到 `/rebotarm/joint_states` 后打开控制锁。
+2. 连接 rosbridge，收到 `/rebot_arm_rs/joint_states` 后打开控制锁。
 3. 选择“完整路径（按原时间回放）”或“仅最终位置（3 秒到位）”，再点击
    “推动真机示教”。网页会请求进入重力补偿，成功后开始记录。
 4. 用手轻推机械臂完成需要的轨迹，再点击“结束真机示教”。网页会先退出

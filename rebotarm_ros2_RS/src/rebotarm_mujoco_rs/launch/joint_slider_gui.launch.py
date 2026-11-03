@@ -12,7 +12,7 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
-            DeclareLaunchArgument("arm_namespace", default_value="rebotarm_rs"),
+            DeclareLaunchArgument("arm_namespace", default_value="rebot_arm_rs_sim"),
             DeclareLaunchArgument("publish_hz", default_value="30.0"),
             DeclareLaunchArgument("gripper_open_position", default_value="5.0"),
             Node(

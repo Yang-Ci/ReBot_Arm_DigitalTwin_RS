@@ -4,7 +4,7 @@ set -euo pipefail
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/rs_env.sh"
 
-export REBOTARM_NAMESPACE="${REBOTARM_NAMESPACE:-rebotarm_rs}"
+export REBOTARM_NAMESPACE="${REBOTARM_NAMESPACE:-rebot_arm_rs_sim}"
 export REBOTARM_MCP_URL="${REBOTARM_MCP_URL:-http://127.0.0.1:8081/mcp}"
 
 REBOTARM_AGENT_HOST="${REBOTARM_AGENT_HTTP_HOST:-0.0.0.0}"

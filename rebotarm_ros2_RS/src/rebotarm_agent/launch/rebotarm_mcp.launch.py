@@ -14,7 +14,7 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
-            DeclareLaunchArgument("arm_namespace", default_value="rebotarm_rs"),
+            DeclareLaunchArgument("arm_namespace", default_value="rebot_arm_rs_sim"),
             DeclareLaunchArgument("host", default_value="127.0.0.1"),
             DeclareLaunchArgument("port", default_value="8081"),
             DeclareLaunchArgument("motion_mode", default_value="locked"),

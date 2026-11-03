@@ -2,8 +2,8 @@
   const TARGET_STORAGE_KEY = 'rebotarm.rs.ros.target';
   const t = window.rebotI18n ? window.rebotI18n.t : (k) => k;
   const ROS_TARGETS = {
-    hardware: { namespace: 'rebotarm', label: 'RS 真机' },
-    simulation: { namespace: 'rebotarm_rs', label: 'RS 仿真' }
+    hardware: { namespace: 'rebot_arm_rs', label: 'RS 真机' },
+    simulation: { namespace: 'rebot_arm_rs_sim', label: 'RS 仿真' }
   };
   function loadTargetKey() {
     try {
@@ -34,6 +34,8 @@
   const MIN_OBJECT_GRASP_M = 0.018;
   const DEFAULT_JOINT_VLIM_RAD_S = 1.20;
   const MAX_JOINT_VLIM_RAD_S = 1.50;
+  const DEFAULT_SLIDER_DAMPING_MS = 30;
+  const DEFAULT_TRAJECTORY_DURATION_S = 2;
   const GRIPPER_VLIM_RAD_S = 5.0;
   const TEACH_ENDPOINT_DURATION_S = 3;
   const STORAGE_ZONES = {
@@ -46,6 +48,11 @@
   const WEB_MUJOCO_LIFT_CLEARANCE_M = 0.13;
   const WEB_MUJOCO_PLACE_PRESS_DEPTH_M = 0.0005;
   const WEB_MUJOCO_RETREAT_CLEARANCE_M = 0.11;
+  const STORAGE_TOOL_PITCH_RAD = 50 * Math.PI / 180;
+  const STORAGE_REPICK_PITCH_RAD = 65 * Math.PI / 180;
+  const STORAGE_PLACE_PITCH_RAD = 72 * Math.PI / 180;
+  const STORAGE_CLEAR_PITCH_RAD = 65 * Math.PI / 180;
+  const STORAGE_ALIGN_TOLERANCE_M = 0.006;
   const VISION_FIRST_LIFT_CLEARANCE_M = 0.040;
   const VISION_FIRST_LIFT_MIN_M = 0.180;
   const VISION_POSE_SKIP_M = 0.006;
@@ -113,6 +120,7 @@
     visionMoveAbove: document.getElementById('ros-vision-move-above'),
     visionPickDemo: document.getElementById('ros-vision-pick-demo'),
     visionPlaceDemo: document.getElementById('ros-vision-place-demo'),
+    safetySection: document.getElementById('ros-safety-section'),
     vlim: document.getElementById('ros-vlim'),
     sliderDamping: document.getElementById('ros-slider-damping'),
     trajectoryDuration: document.getElementById('ros-trajectory-duration'),
@@ -146,6 +154,7 @@
     });
   }
   if (els.targetTitle) els.targetTitle.textContent = `${TARGET.label}连接`;
+  if (els.safetySection) els.safetySection.hidden = TARGET_KEY !== 'hardware';
   if (els.teachHardwareRecord) els.teachHardwareRecord.hidden = TARGET_KEY !== 'hardware';
   if (els.teachHardwareModeRow) els.teachHardwareModeRow.hidden = TARGET_KEY !== 'hardware';
   if (els.teachHomeGripperRow) els.teachHomeGripperRow.hidden = TARGET_KEY !== 'hardware';
@@ -154,6 +163,7 @@
       ? '镜像 RS MuJoCo 实际状态到网页'
       : `镜像${TARGET.label}关节状态到网页`;
   }
+  if (TARGET_KEY === 'simulation' && els.mirror) els.mirror.checked = true;
   if (els.controlLabel) {
     els.controlLabel.textContent = TARGET_KEY === 'hardware'
       ? '允许网页向 RS 真机发控制'
@@ -210,6 +220,8 @@
   let lastTargetPoseSent = 0;
   let latestVisionPayload = null;
   let latestVisionAt = 0;
+  let latestMujocoObjects = [];
+  let latestMujocoObjectsAt = 0;
   let latestMujocoSimulationMode = '';
   let selectedVisionTarget = null;
   let lastVisionTarget = null;
@@ -241,6 +253,9 @@
   // preset/replay from looking like seven independent, stepped animations.
   let hardwareBatchFeedbackActive = false;
   let hardwareBatchFinishTimer = 0;
+  let simulationDragHandoff = null;
+  let simulationDragHandoffFrame = 0;
+  const SIMULATION_DRAG_HANDOFF_MS = 350;
   const hardwareFeedbackFilters = new Map();
   let feedbackRenderFrame = 0;
   let feedbackRenderCurrent = null;
@@ -277,6 +292,7 @@
   client.addEventListener('status', (event) => {
     const detail = event.detail || {};
    setStatus(detail.state, detail.message);
+    updateSimulationPresetFeedbackMode();
     els.connect.disabled = detail.state === 'connecting' || detail.state === 'open';
     els.disconnect.disabled = detail.state === 'connecting' || detail.state === 'closed' || detail.state === 'error';
    if (detail.state !== 'connecting') {
@@ -397,6 +413,7 @@
   });
   els.mirror.addEventListener('change', () => {
     resetFeedbackRenderer();
+    updateSimulationPresetFeedbackMode();
     if (
       els.mirror.checked &&
       TARGET_KEY === 'hardware' &&
@@ -411,6 +428,7 @@
     if (typeof sim.setHardwareFeedbackDriven === 'function') {
       sim.setHardwareFeedbackDriven(TARGET_KEY === 'hardware');
     }
+    updateSimulationPresetFeedbackMode();
     sim.onCommand((command) => forwardSimCommand(command));
     bindJointSliderFallback();
   });
@@ -420,6 +438,13 @@
   window.setInterval(updateDiagnostics, 1000);
   window.setInterval(pollGravityCompensationStatus, 500);
   window.setInterval(pollGripperAssistStatus, 750);
+
+  function updateSimulationPresetFeedbackMode() {
+    const sim = window.reBotSim;
+    if (sim && typeof sim.setSimulationPresetFeedbackDriven === 'function') {
+      sim.setSimulationPresetFeedbackDriven(TARGET_KEY === 'simulation' && client.connected && els.mirror.checked);
+    }
+  }
 
   function handleJointStates(msg) {
     if (!window.reBotSim || !Array.isArray(msg.name) || !Array.isArray(msg.position)) return;
@@ -526,9 +551,9 @@
           simTargetAngles.delete('gripper');
           mirrorHoldUntil.delete('gripper');
         }
-        if (reachedTarget || targetExpired || typeof target !== 'number' || now > holdUntil) {
-          window.reBotSim.setGripperWidth(width, { source: 'ros', animate: false });
-        }
+        // The command target is retained for status, but the solid fingers
+        // must follow every physical sample while opening or closing.
+        window.reBotSim.setGripperWidth(width, { source: 'ros', animate: false, forceFeedback: true });
         hideGhostWhenTargetsRetired();
       }
     }
@@ -548,6 +573,7 @@
 
   function mirrorJointAngles(next) {
     if (!els.mirror.checked || !Object.keys(next).length) return;
+    if (TARGET_KEY === 'simulation' && simulationDragHandoff) return;
     if (TARGET_KEY === 'hardware' && hardwareBatchFeedbackActive) {
       Object.entries(next).forEach(([name, value]) => {
         const target = simTargetAngles.get(name);
@@ -775,6 +801,7 @@
   }
 
   function resetFeedbackRenderer() {
+    cancelSimulationDragHandoff();
     cancelHardwareSliderFeedback();
     if (feedbackRenderFrame) window.cancelAnimationFrame(feedbackRenderFrame);
     feedbackRenderFrame = 0;
@@ -792,6 +819,48 @@
     gripperFeedbackStartedAt = 0;
     gripperFeedbackDuration = 1;
     gripperFeedbackLastSampleAt = 0;
+  }
+
+  function cancelSimulationDragHandoff() {
+    simulationDragHandoff = null;
+    if (simulationDragHandoffFrame) window.cancelAnimationFrame(simulationDragHandoffFrame);
+    simulationDragHandoffFrame = 0;
+  }
+
+  function startSimulationDragHandoff() {
+    cancelSimulationDragHandoff();
+    if (!client.connected || !els.mirror.checked || !mujocoStateIsFresh() ||
+        !latestJointPositions || !JOINT_NAMES.every((name) => Number.isFinite(latestJointPositions[name])) ||
+        !window.reBotSim || typeof window.reBotSim.getAngles !== 'function') return;
+    const from = window.reBotSim.getAngles();
+    simulationDragHandoff = { from, startedAt: performance.now() };
+    simulationDragHandoffFrame = window.requestAnimationFrame(renderSimulationDragHandoff);
+  }
+
+  function renderSimulationDragHandoff(timestamp) {
+    simulationDragHandoffFrame = 0;
+    const handoff = simulationDragHandoff;
+    if (!handoff) return;
+    if (!client.connected || !els.mirror.checked || !mujocoStateIsFresh()) {
+      cancelSimulationDragHandoff();
+      return;
+    }
+    const ratio = clamp((timestamp - handoff.startedAt) / SIMULATION_DRAG_HANDOFF_MS, 0, 1);
+    const eased = ratio * ratio * (3 - 2 * ratio);
+    const angles = {};
+    JOINT_NAMES.forEach((name) => {
+      const measured = latestJointPositions[name];
+      const start = handoff.from[name];
+      if (Number.isFinite(measured)) {
+        angles[name] = Number.isFinite(start) ? start + (measured - start) * eased : measured;
+      }
+    });
+    window.reBotSim.setAngles(angles, { source: 'ros' });
+    if (ratio < 1) {
+      simulationDragHandoffFrame = window.requestAnimationFrame(renderSimulationDragHandoff);
+    } else {
+      simulationDragHandoff = null;
+    }
   }
 
   function scheduleHardwareBatchFeedbackFinish() {
@@ -983,9 +1052,7 @@
           simTargetAngles.delete('gripper');
           mirrorHoldUntil.delete('gripper');
         }
-        if (reachedTarget || targetExpired || typeof target !== 'number' || now > holdUntil) {
-          window.reBotSim.setGripperWidth(width, { source: 'ros', animate: false });
-        }
+        window.reBotSim.setGripperWidth(width, { source: 'ros', animate: false, forceFeedback: true });
         hideGhostWhenTargetsRetired();
       }
     }
@@ -1184,6 +1251,7 @@
      return;
    }
    if (command && command.type === 'tcp-drag-start') {
+     cancelSimulationDragHandoff();
      beginTcpDragHandoff();
      return;
    }
@@ -1196,6 +1264,7 @@
      return;
    }
    if (!command || command.type !== 'joint') return;
+   if (command.source !== 'drag' && command.source !== 'drag-settle') cancelSimulationDragHandoff();
    lastObservedSimCommand.set(command.name, {
      value: command.value,
      phase: command.phase || 'commit',
@@ -1503,8 +1572,10 @@
 
   function publishTeachingReplayGripper(position) {
     publishGripperWidthCommand(position);
-    simTargetAngles.set('gripper', position);
-    mirrorHoldUntil.set('gripper', performance.now() + 500);
+    if (!(TARGET_KEY === 'simulation' && els.mirror.checked && mujocoStateIsFresh())) {
+      simTargetAngles.set('gripper', position);
+      mirrorHoldUntil.set('gripper', performance.now() + 500);
+    }
     syncSimGripper(position);
   }
 
@@ -1677,15 +1748,19 @@
   }
 
   function forwardJointBatch(command) {
+    cancelSimulationDragHandoff();
     cancelDampedSliderCommands();
     const joints = command && command.joints && typeof command.joints === 'object' ? command.joints : {};
     const names = [...JOINT_NAMES, 'gripper'].filter((name) => typeof joints[name] === 'number' && Number.isFinite(joints[name]));
     if (!names.length) return;
 
     const handoffToFeedback = Boolean(
-      command.handoffToFeedback && TARGET_KEY === 'hardware'
+      command.handoffToFeedback && (TARGET_KEY === 'hardware' ||
+        (TARGET_KEY === 'simulation' && els.mirror.checked && mujocoStateIsFresh()))
     );
-    if (!handoffToFeedback) {
+    const simulationFeedbackPreset = TARGET_KEY === 'simulation' && els.mirror.checked &&
+      client.connected && command.source === 'preset';
+    if (!handoffToFeedback && !simulationFeedbackPreset) {
       const holdUntil = performance.now() + MIRROR_HOLD_MS;
       names.forEach((name) => {
         simTargetAngles.set(name, joints[name]);
@@ -1728,6 +1803,7 @@
         simTargetAngles.delete(name);
         mirrorHoldUntil.delete(name);
       });
+      if (TARGET_KEY === 'simulation') startSimulationDragHandoff();
       // Feedback received while the pointer was down describes older physical
       // positions.  Discard those transitions so they cannot replay once the
       // drag guard is removed; the next ROS sample starts a fresh transition.
@@ -2446,6 +2522,8 @@
       return;
     }
     latestMujocoSimulationMode = String(payload.simulation_mode || '').toLowerCase();
+    latestMujocoObjects = Array.isArray(payload.objects) ? payload.objects : [];
+    latestMujocoObjectsAt = performance.now();
     if (window.reBotSim && typeof window.reBotSim.syncMujocoObjectStates === 'function') {
       window.reBotSim.syncMujocoObjectStates(payload.objects || []);
     }
@@ -2678,7 +2756,7 @@
         writeLog(`${label}：已在目标附近，跳过重复移动`, 'info');
         return { success: true, skipped: true };
       }
-      const result = await runVisionMoveStep(pose, moveDuration, label);
+      const result = await runVisionMoveStep(pose, moveDuration, label, { strictIk: plan.storagePick });
       lastPose = pose;
       return result;
     };
@@ -2726,7 +2804,7 @@
       // safe high waypoint.  lastVisionTarget describes history, not a
       // mandatory waypoint; using it here made every target switch revisit the
       // previous object before moving to the requested one.
-      const route = buildVisionTransitRoute(target);
+      const route = buildVisionTransitRoute(target, plan);
       const moveHighRoute = async () => {
         for (const waypoint of route) {
           await runIfNeeded(waypoint.pose, Math.max(0.9, duration * 0.45), waypoint.label);
@@ -2795,7 +2873,7 @@
       writeLog(`夹爪已稳定夹紧 ${target.color}，开始离桌抬升`, 'ok');
       const firstLiftDuration = Math.max(0.8, duration * 0.5);
       if (String(target.color || '') === 'blue') {
-        await runVisionMoveStep(plan.firstLiftPose, firstLiftDuration, t('msg.pickBlueLift', { z: plan.firstLiftPose.position.z.toFixed(3) }));
+        await runVisionMoveStep(plan.firstLiftPose, firstLiftDuration, t('msg.pickBlueLift', { z: plan.firstLiftPose.position.z.toFixed(3) }), { strictIk: plan.storagePick });
         lastPose = plan.firstLiftPose;
       } else {
         await runIfNeeded(plan.firstLiftPose, firstLiftDuration, t('msg.pickLift', { color: target.color }));
@@ -2813,15 +2891,24 @@
         await runIfNeeded(plan.transitPose, Math.max(0.8, duration * 0.5), t('msg.pickBlueTransit', { z: plan.transitPose.position.z.toFixed(3) }));
         lastPose = plan.transitPose;
       }
-      const actualTcp = window.reBotSim && typeof window.reBotSim.getTcpPosition === 'function'
-        ? window.reBotSim.getTcpPosition()
-        : null;
-      const carryOffset = buildVisionCarryOffset(plan, liftedTarget, actualTcp);
+      const currentLiftedTarget = String(target.color || '') === 'blue'
+        ? await waitForFreshVisionTarget(target.color, 600)
+        : liftedTarget;
+      const actualTcp = getVisionGraspTcpPosition();
+      const carryOffset = buildVisionCarryOffset(plan, currentLiftedTarget || liftedTarget, actualTcp);
       const storageTarget = buildStorageVisionTarget(target, carryOffset) || target;
+      const simulation = TARGET_KEY === 'simulation';
+      const placePitch = plan.storagePick ? STORAGE_REPICK_PITCH_RAD : STORAGE_PLACE_PITCH_RAD;
       await safelyPlaceVisionTarget(storageTarget, duration, '视觉入仓', {
-        transferPose: buildStorageRoutePose(storageTarget, WEB_MUJOCO_LIFT_CLEARANCE_M),
-        placePose: poseFromVisionTarget(Number(storageTarget.z), storageTarget),
-        retreatPose: buildStorageRoutePose(storageTarget, WEB_MUJOCO_RETREAT_CLEARANCE_M)
+        transferPose: simulation ? buildStorageRoutePose(storageTarget, WEB_MUJOCO_LIFT_CLEARANCE_M)
+          : poseFromVisionTarget(Number(storageTarget.storageObjectZ) + WEB_MUJOCO_LIFT_CLEARANCE_M, storageTarget),
+        placePose: simulation ? poseFromStorageTarget(Number(storageTarget.z), storageTarget, placePitch)
+          : poseFromVisionTarget(Number(storageTarget.z), storageTarget),
+        retreatPose: simulation ? buildStorageRoutePose(storageTarget, WEB_MUJOCO_RETREAT_CLEARANCE_M, STORAGE_CLEAR_PITCH_RAD)
+          : poseFromVisionTarget(Number(storageTarget.storageObjectZ) + WEB_MUJOCO_RETREAT_CLEARANCE_M, storageTarget),
+        storageZone: STORAGE_ZONES[String(target.color || '').toLowerCase()],
+        placePitch,
+        placementTolerance: plan.storagePick ? 0.012 : STORAGE_ALIGN_TOLERANCE_M
       });
       lastVisionTarget = cloneVisionTarget(storageTarget);
       setMessage(t('msg.pickStoreDone', { color: target.color }));
@@ -2838,16 +2925,96 @@
   async function safelyPlaceVisionTarget(target, duration, reason, route = {}) {
     const plan = buildVisionPickPlan(target);
     if (!plan) throw new Error(`${reason || '视觉放置'}：目标位姿无效`);
+    const storage = TARGET_KEY === 'simulation' && route.storageZone;
+    const placePitch = Number.isFinite(route.placePitch) ? route.placePitch : STORAGE_PLACE_PITCH_RAD;
+    const placementTolerance = Number.isFinite(route.placementTolerance) ? route.placementTolerance : STORAGE_ALIGN_TOLERANCE_M;
+    let beforeRelease = null;
     await runVisionMoveStep(
       route.transferPose || plan.approachPose,
       Math.max(0.8, duration * 0.45),
-      `${reason || '视觉放置'}：高位转移到 ${target.color}`
+      `${reason || '视觉放置'}：高位转移到 ${target.color}`,
+      { strictIk: Boolean(storage) }
     );
+    let placePose = route.placePose || plan.graspPose;
+    if (storage) {
+      const zone = route.storageZone;
+      let observed;
+      let tcp;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        observed = await waitForNewVisionTarget(target.color, 900);
+        tcp = getVisionGraspTcpPosition();
+        if (!observed || !tcp) throw new Error('视觉入仓：缺少实时物体或抓取点反馈，已停止放置');
+        const dx = zone.x - Number(observed.x);
+        const dy = zone.y - Number(observed.y);
+        if (!Number.isFinite(dx) || !Number.isFinite(dy) || Number(observed.z) < zone.z + 0.025) {
+          throw new Error('视觉入仓：物体未在夹爪中，已停止放置');
+        }
+        if (Math.hypot(dx, dy) <= STORAGE_ALIGN_TOLERANCE_M) break;
+        if (attempt === 2) throw new Error(`视觉入仓：物体偏离收纳区 ${(Math.hypot(dx, dy) * 1000).toFixed(0)}mm，已停止放置`);
+        const corrected = poseFromStorageTarget(tcp.z, { ...target, x: tcp.x + dx, y: tcp.y + dy });
+        await runVisionMoveStep(corrected, Math.max(0.8, duration * 0.45), '视觉入仓：按物体位置对准收纳区', { strictIk: true });
+      }
+      const currentOffset = buildVisionCarryOffset(null, observed, tcp);
+      const alignedTarget = buildStorageVisionTarget(target, currentOffset);
+      placePose = poseFromStorageTarget(Number(alignedTarget.z), alignedTarget, placePitch);
+    }
     await runVisionMoveStep(
-      route.placePose || plan.graspPose,
+      placePose,
       Math.max(0.7, duration * 0.4),
-      `${reason || '视觉放置'}：下探 ${target.color}`
+      `${reason || '视觉放置'}：下探 ${target.color}`,
+      { strictIk: Boolean(storage) }
     );
+    if (storage) {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const observed = await waitForNewVisionTarget(target.color, 900);
+        const tcp = getVisionGraspTcpPosition();
+        if (!observed || !tcp) throw new Error('视觉入仓：缺少放置位置反馈，已停止松开夹爪');
+        const dx = route.storageZone.x - Number(observed.x);
+        const dy = route.storageZone.y - Number(observed.y);
+        const error = Math.hypot(dx, dy);
+        if (!Number.isFinite(error) || Number(observed.z) > route.storageZone.z + 0.025) {
+          throw new Error('视觉入仓：物体未到达桌面，已停止松开夹爪');
+        }
+        if (error <= placementTolerance) {
+          beforeRelease = observed;
+          break;
+        }
+        if (attempt === 2 || error > 0.040) {
+          throw new Error(`视觉入仓：放置偏差 ${(error * 1000).toFixed(0)}mm，已停止松开夹爪`);
+        }
+        const corrected = poseFromStorageTarget(tcp.z, { ...target, x: tcp.x + dx, y: tcp.y + dy }, placePitch);
+        await runVisionMoveStep(corrected, Math.max(0.8, duration * 0.45), '视觉入仓：下探后微调位置', { strictIk: true });
+      }
+    }
+    if (storage) {
+      let supported = await waitForStableTableSupport(target, 700);
+      for (let attempt = 0; !supported && attempt < 4; attempt += 1) {
+        const tcp = getVisionGraspTcpPosition();
+        if (!tcp) throw new Error('视觉入仓：缺少抓取点反馈，已停止下探');
+        const lower = poseFromStorageTarget(tcp.z - 0.003, { ...target, x: tcp.x, y: tcp.y }, placePitch);
+        await runVisionMoveStep(lower, Math.max(0.8, duration * 0.45), '视觉入仓：缓慢落到桌面', { strictIk: true });
+        supported = await waitForStableTableSupport(target, 700);
+      }
+      if (!supported) throw new Error('视觉入仓：未确认物体接触桌面，已停止松开夹爪');
+      const supportedTarget = await waitForNewVisionTarget(target.color, 900);
+      const supportedError = supportedTarget ? Math.hypot(Number(supportedTarget.x) - route.storageZone.x, Number(supportedTarget.y) - route.storageZone.y) : Infinity;
+      if (!Number.isFinite(supportedError) || supportedError > 0.012) {
+        throw new Error('视觉入仓：物体落桌后偏离收纳区，已停止松开夹爪');
+      }
+      beforeRelease = supportedTarget;
+      const currentWidth = readGripperFeedbackPosition(NaN);
+      if (!Number.isFinite(currentWidth)) throw new Error('视觉入仓：缺少夹爪反馈，已停止松开');
+      // Open incrementally while the object is still between the pads; once
+      // they are clear, the remaining travel no longer pushes the object.
+      for (const increment of [0.004, 0.008, 0.012]) {
+        const releaseWidth = Math.min(OPEN_GRIPPER_M, currentWidth + increment);
+        if (releaseWidth >= OPEN_GRIPPER_M - 0.003) break;
+        await commandGripperAndWait(releaseWidth, '视觉入仓：轻缓松开物体', {
+          timeoutMs: 4500, minWaitMs: 250, tolerance: 0.002,
+          requireReached: true, requireSettled: true, settleMs: 150, afterMs: 100
+        });
+      }
+    }
     await commandGripperAndWait(OPEN_GRIPPER_M, `${reason || '视觉放置'}：松开 ${target.color}`, {
       // MuJoCo's force-driven fingers need the same physical travel time when
       // opening as when closing.  The previous 4.5 s timeout expired while the
@@ -2861,11 +3028,33 @@
       afterMs: 120
     });
     releaseSimCarriedObject();
+    if (storage) {
+      const afterRelease = await waitForNewVisionTarget(target.color, 900);
+      if (!afterRelease) throw new Error('视觉入仓：松开后缺少物体反馈');
+      if (beforeRelease) {
+        const shift = Math.hypot(Number(afterRelease.x) - Number(beforeRelease.x), Number(afterRelease.y) - Number(beforeRelease.y));
+        writeLog(`视觉入仓：松开期间物体位移 ${(shift * 1000).toFixed(0)}mm`, 'info');
+      }
+      const tcp = getVisionGraspTcpPosition();
+      if (!tcp) throw new Error('视觉入仓：缺少抓取点反馈，已停止抬升');
+      // Move straight up from the measured release position before travelling
+      // to the high waypoint, so the opening fingers do not sweep the object.
+      const clearPose = poseFromStorageTarget(tcp.z + 0.050, { ...target, x: tcp.x, y: tcp.y }, STORAGE_CLEAR_PITCH_RAD);
+      await runVisionMoveStep(clearPose, Math.max(0.8, duration * 0.45), '视觉入仓：竖直抬起夹爪', { strictIk: true });
+    }
     await runVisionMoveStep(
       route.retreatPose || plan.approachPose,
       Math.max(0.8, duration * 0.45),
       `${reason || '视觉放置'}：竖直抬升离开 ${target.color}`
     );
+    if (storage) {
+      const observed = await waitForNewVisionTarget(target.color, 900);
+      const error = observed ? Math.hypot(Number(observed.x) - route.storageZone.x, Number(observed.y) - route.storageZone.y) : Infinity;
+      if (!observed || !Number.isFinite(error) || error > 0.018 || Number(observed.z) > route.storageZone.z + 0.025) {
+        throw new Error(`视觉入仓：松开后物体未稳定落在收纳区（偏差 ${Number.isFinite(error) ? `${(error * 1000).toFixed(0)}mm` : '未知'}）`);
+      }
+      writeLog(`视觉入仓：物体落点偏差 ${(error * 1000).toFixed(0)}mm`, 'ok');
+    }
     lastVisionTarget = cloneVisionTarget(target);
   }
 
@@ -2906,10 +3095,9 @@
     }
   }
 
-  async function runVisionMoveStep(pose, duration, label) {
+  async function runVisionMoveStep(pose, duration, label, options = {}) {
     writePoseInputs(pose);
-    client.publishTargetPose(pose);
-    const result = await sendVisionMoveGoal(pose, duration, label);
+    const result = await sendVisionMoveGoal(pose, duration, label, options);
     if (!movementSucceeded(result)) {
       throw new Error(`${label}失败，已停止后续动作`);
     }
@@ -2975,18 +3163,23 @@
   function buildVisionPickPlan(target) {
     const approachZ = getVisionApproachZ(target);
     const graspZ = getVisionGraspZ(target);
-    const approachPose = poseFromVisionTarget(approachZ, target);
-    const graspPose = poseFromVisionTarget(graspZ, target);
+    const zone = STORAGE_ZONES[String(target && target.color || '').toLowerCase()];
+    const storagePick = Boolean(TARGET_KEY === 'simulation' && zone &&
+      Math.hypot(Number(target.x) - zone.x, Number(target.y) - zone.y) <= 0.055 &&
+      Math.abs(Number(target.z) - zone.z) <= 0.035);
+    const approachPose = storagePick ? poseFromStorageTarget(approachZ, target) : poseFromVisionTarget(approachZ, target);
+    const graspPose = storagePick ? poseFromStorageTarget(graspZ, target, STORAGE_REPICK_PITCH_RAD) : poseFromVisionTarget(graspZ, target);
     const firstLiftZ = Math.max(
       graspZ + VISION_FIRST_LIFT_CLEARANCE_M,
       getVisionFirstLiftMinZ(target),
       visionObjectZ(target) + WEB_MUJOCO_LIFT_CLEARANCE_M
     );
-    const firstLiftPose = poseFromVisionTarget(firstLiftZ, target);
+    const firstLiftPose = storagePick ? poseFromStorageTarget(firstLiftZ, target) : poseFromVisionTarget(firstLiftZ, target);
     const transitPose = firstLiftPose;
     if (!transitPose || !approachPose || !graspPose || !firstLiftPose) return null;
     return {
       target,
+      storagePick,
       approachZ,
       graspZ,
       transitPose,
@@ -3010,7 +3203,7 @@
   }
 
   function buildVisionCarryOffset(plan, liftedTarget, actualTcp) {
-    if (actualTcp && Number.isFinite(actualTcp.x) && Number.isFinite(actualTcp.y) && Number.isFinite(actualTcp.z)) {
+    if (liftedTarget && actualTcp && Number.isFinite(actualTcp.x) && Number.isFinite(actualTcp.y) && Number.isFinite(actualTcp.z)) {
       const x = Number(liftedTarget.x) - Number(actualTcp.x);
       const y = Number(liftedTarget.y) - Number(actualTcp.y);
       const z = Number(liftedTarget.z) - Number(actualTcp.z);
@@ -3028,23 +3221,80 @@
     return {
       x: 0,
       y: 0,
-      z: getVisionGraspZ(target) - visionObjectZ(target)
+      z: TARGET_KEY === 'simulation'
+        ? visionObjectZ(target) - getVisionGraspZ(target)
+        : getVisionGraspZ(target) - visionObjectZ(target)
     };
   }
 
-  function buildStorageRoutePose(target, clearance) {
+  function buildStorageRoutePose(target, clearance, pitch = STORAGE_TOOL_PITCH_RAD) {
     const objectZ = Number(target && target.storageObjectZ);
     const z = Number.isFinite(objectZ)
       ? objectZ + clearance
       : visionObjectZ(target) + clearance;
-    return poseFromVisionTarget(z, target);
+    return poseFromStorageTarget(z, target, pitch);
   }
 
-  function buildVisionTransitRoute(target) {
+  function getVisionGraspTcpPosition() {
+    if (!window.reBotSim) return null;
+    if (TARGET_KEY === 'simulation') {
+      if (!mujocoStateIsFresh() || !latestJointPositions ||
+          !JOINT_NAMES.every((name) => Number.isFinite(latestJointPositions[name])) ||
+          typeof window.reBotSim.getGraspTcpPosition !== 'function') return null;
+      return window.reBotSim.getGraspTcpPosition(latestJointPositions);
+    }
+    return typeof window.reBotSim.getTcpPosition === 'function' ? window.reBotSim.getTcpPosition() : null;
+  }
+
+  async function waitForNewVisionTarget(color, timeoutMs) {
+    const initial = latestVisionAt;
+    const start = performance.now();
+    while (performance.now() - start < timeoutMs) {
+      if (latestVisionAt > initial) {
+        const target = chooseVisionTarget(color);
+        if (target) return cloneVisionTarget(target);
+      }
+      await sleep(50);
+    }
+    return null;
+  }
+
+  async function waitForStableTableSupport(target, timeoutMs) {
+    const names = { red: 'red_cube', blue: 'blue_block', yellow: 'yellow_cylinder' };
+    const name = target && (target.name || names[String(target.color || '').toLowerCase()]);
+    const start = performance.now();
+    let stableSince = 0;
+    while (performance.now() - start < timeoutMs) {
+      const now = performance.now();
+      const object = latestMujocoObjects.find((item) => item && item.name === name);
+      const stable = now - latestMujocoObjectsAt < 500 && object && object.table_contact === true &&
+        Number.isFinite(object.linear_speed_mps) && object.linear_speed_mps < 0.025;
+      if (stable) {
+        if (!stableSince) stableSince = now;
+        if (now - stableSince >= 120) return true;
+      } else stableSince = 0;
+      await sleep(50);
+    }
+    return false;
+  }
+
+  function poseFromStorageTarget(z, target, pitch = STORAGE_TOOL_PITCH_RAD) {
+    const pose = poseFromVisionTarget(z, target);
+    if (!pose) return null;
+    const yaw = estimateVisionGraspPlan(target).yawRad;
+    const sy = Math.sin(yaw / 2);
+    const cy = Math.cos(yaw / 2);
+    const sp = Math.sin(pitch / 2);
+    const cp = Math.cos(pitch / 2);
+    pose.orientation = { x: -sy * sp, y: cy * sp, z: sy * cp, w: cy * cp };
+    return pose;
+  }
+
+  function buildVisionTransitRoute(target, plan = null) {
     const route = [];
     appendVisionRoutePose(
       route,
-      poseFromVisionTarget(getVisionApproachZ(target), target),
+      plan && plan.storagePick ? plan.approachPose : poseFromVisionTarget(getVisionApproachZ(target), target),
       t('msg.avoidMove', { color: target.color })
     );
     return route;
@@ -3091,11 +3341,11 @@
     };
   }
 
-  async function sendVisionMoveGoal(pose, duration, optimisticMessage) {
+  async function sendVisionMoveGoal(pose, duration, optimisticMessage, options = {}) {
     // rosapi may hide ROS 2 action services. The hardware controller always
     // exposes MoveToPose, so only use the IK/trajectory fallback in simulation.
     if (TARGET_KEY !== 'hardware' && !hasActionService(`/${NS}/move_to_pose`)) {
-      return moveToPoseViaIkTrajectory(pose, duration, optimisticMessage);
+      return moveToPoseViaIkTrajectory(pose, duration, optimisticMessage, options);
     }
 
     try {
@@ -3114,7 +3364,7 @@
     }
   }
 
-  async function moveToPoseViaIkTrajectory(pose, duration, optimisticMessage) {
+  async function moveToPoseViaIkTrajectory(pose, duration, optimisticMessage, options = {}) {
     setMessage(t('msg.ikSolving', { label: optimisticMessage }));
     writeLog(t('msg.ikSolving', { label: optimisticMessage }), 'info');
     const ik = await guardedCall(
@@ -3130,6 +3380,10 @@
     const ikBestEffort = ik.success === false;
     if (ikBestEffort) {
       const message = ik.message || t('msg.ikApproxFallback');
+      if (options.strictIk) {
+        writeLog(`${message}，目标不可达，已停止。`, 'warn');
+        return { success: false, localPlayback: true };
+      }
       setMessage(`${message}，继续执行近似解。`);
       writeLog(`${message}，继续执行近似解。`, 'warn');
     }
@@ -3685,24 +3939,21 @@
       // move only with measured feedback from /gripper/state.
       return;
     }
+    if (els.mirror.checked && mujocoStateIsFresh()) return;
     if (typeof window.reBotSim.setGripperWidth !== 'function') return;
     window.reBotSim.setGripperWidth(position, { source: 'ui', animate: true });
   }
 
   function getVlim() {
-    return clamp(
-      Number(els.vlim.value) || DEFAULT_JOINT_VLIM_RAD_S,
-      0.05,
-      MAX_JOINT_VLIM_RAD_S
-    );
+    return clamp(Number(els.vlim && els.vlim.value) || DEFAULT_JOINT_VLIM_RAD_S, 0.05, MAX_JOINT_VLIM_RAD_S);
   }
 
   function getSliderDampingMs() {
-    return clamp(Number(els.sliderDamping && els.sliderDamping.value) || 0, 0, 300);
+    return els.sliderDamping ? clamp(Number(els.sliderDamping.value) || 0, 0, 300) : DEFAULT_SLIDER_DAMPING_MS;
   }
 
   function getTrajectoryDuration() {
-    return clamp(Number(els.trajectoryDuration.value) || 2, 1, 30);
+    return clamp(Number(els.trajectoryDuration && els.trajectoryDuration.value) || DEFAULT_TRAJECTORY_DURATION_S, 1, 30);
   }
 
   function secondsToRosTime(seconds) {

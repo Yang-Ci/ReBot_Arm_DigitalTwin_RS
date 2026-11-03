@@ -42,7 +42,7 @@ class FakeRsDriver(Node):
     def __init__(self) -> None:
         super().__init__("fake_rebotarm_rs_driver")
 
-        self.declare_parameter("arm_namespace", "rebotarm_rs")
+        self.declare_parameter("arm_namespace", "rebot_arm_rs_sim")
         self.declare_parameter("joint_state_rate", 100.0)
         self.declare_parameter("max_joint_speed", 1.0)
         # Match the RS web/MIT command limit. A full 0 -> 5 rad stroke then
@@ -53,9 +53,9 @@ class FakeRsDriver(Node):
 
         self.namespace = str(self.get_parameter("arm_namespace").value).strip("/")
         self.joint_names = [f"joint{index}" for index in range(1, 7)]
-        self.max_joint_speed = max(
-            0.01, float(self.get_parameter("max_joint_speed").value)
-        )
+        # Zero disables this fake driver's software speed limit. Positive
+        # values retain the existing rate-limited position simulation.
+        self.max_joint_speed = max(0.0, float(self.get_parameter("max_joint_speed").value))
         self.max_gripper_speed = max(
             0.01, float(self.get_parameter("max_gripper_speed").value)
         )
@@ -350,8 +350,9 @@ class FakeRsDriver(Node):
 
         for index in range(6):
             before = self.positions[index]
-            self.positions[index] = self._step_towards(
-                before, self.targets[index], self.max_joint_speed * dt
+            self.positions[index] = (
+                self._step_towards(before, self.targets[index], self.max_joint_speed * dt)
+                if self.max_joint_speed > 0.0 else self.targets[index]
             )
             self.velocities[index] = (self.positions[index] - before) / dt
             moving = moving or abs(self.targets[index] - self.positions[index]) > 0.002

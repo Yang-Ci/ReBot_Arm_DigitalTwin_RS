@@ -29,11 +29,11 @@ flowchart LR
 - 关节输入死区为 1°；松手会强制提交最终值，不会永远停在阻尼中间值。
 - TCP 拖拽先在浏览器内用 DLS 求逆运动学。RS 阻尼会在 0.018–0.075 之间随奇异程度
   调整，再把求出的关节目标走同一条 `JointMitCmd` 链。
-- 网页速度 `vlim` 默认 1.2 rad/s，允许范围 0.05–1.5 rad/s。
+- 真机网页速度 `vlim` 默认 1.2 rad/s，允许范围 0.05–1.5 rad/s；仿真模式隐藏此面板。
 
 ### ROS 与控制器侧
 
-- 关节话题：`/rebotarm/joints/<joint>/cmd/mit`。
+- 关节话题：`/rebot_arm_rs/joints/<joint>/cmd/mit`。
 - 默认仲裁策略是 `reject`：轨迹、重力补偿和安全回零期间拒绝冲突命令。
 - 新目标只更新在线轨迹终点；电机发送不依赖下一帧网页消息。
 - 125 Hz 控制循环根据当前参考位置、速度、加速度继续前进，约束为 4 rad/s²、
@@ -75,9 +75,9 @@ flowchart RL
 
 | 话题 | 含义 |
 |---|---|
-| `/rebotarm/joint_states` | 电机实际反馈 |
-| `/rebotarm/control_reference` | 以 ROS 状态发布率（默认 60 Hz）采样的 125 Hz 在线轨迹参考；`effort` 携带参考加速度 |
-| `/rebotarm/control_target` | 网页或动作层最终目标 |
+| `/rebot_arm_rs/joint_states` | 电机实际反馈 |
+| `/rebot_arm_rs/control_reference` | 以 ROS 状态发布率（默认 60 Hz）采样的 125 Hz 在线轨迹参考；`effort` 携带参考加速度 |
+| `/rebot_arm_rs/control_target` | 网页或动作层最终目标 |
 
 同时记录这三组数据可以判断问题在哪一层：目标阶跃说明输入层不连续；参考不连续说明轨迹
 生成问题；参考连续但反馈过冲说明真机增益、负载、摩擦或电流环需要调试；只有网页画面抖动
@@ -124,10 +124,10 @@ flowchart LR
 服务：
 
 ```text
-/rebotarm/gravity_compensation/start
-/rebotarm/gravity_compensation/stop
-/rebotarm/gravity_compensation/status
-/rebotarm/gripper/assist/status
+/rebot_arm_rs/gravity_compensation/start
+/rebot_arm_rs/gravity_compensation/stop
+/rebot_arm_rs/gravity_compensation/status
+/rebot_arm_rs/gripper/assist/status
 ```
 
 ## 5. 安全回零与失能
@@ -182,8 +182,8 @@ jerk MIT 控制不是同一个轨迹实现。
 
 | 环境 | 默认命名空间 | 用途 |
 |---|---|---|
-| 真机 | `/rebotarm` | `./rebotarm start rs` |
-| Fake Driver + MuJoCo | `/rebotarm_rs` | `./rebotarm start rs_sim` |
+| 真机 | `/rebot_arm_rs` | `./rebotarm start rs` |
+| Fake Driver + MuJoCo | `/rebot_arm_rs_sim` | `./rebotarm start rs_sim` |
 
 网页连接后必须选对命名空间。若仿真能动、真机不动，第一步先检查网页当前选择的是不是
-`/rebotarm`，再检查 `arm_status`、命令话题订阅数和 `can0`。
+`/rebot_arm_rs`，再检查 `arm_status`、命令话题订阅数和 `can0`。

@@ -104,7 +104,7 @@ def _parse_args() -> argparse.Namespace:
         choices=sorted(_ACTIONS),
         help="action name to cancel (default: move_to_pose)",
     )
-    parser.add_argument("--namespace", default="rebotarm")
+    parser.add_argument("--namespace", default="rebot_arm_rs")
     return parser.parse_args()
 
 

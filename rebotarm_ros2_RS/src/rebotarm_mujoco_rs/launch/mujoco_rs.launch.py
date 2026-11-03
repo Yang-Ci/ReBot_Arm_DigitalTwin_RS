@@ -9,7 +9,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 def generate_launch_description():
     return LaunchDescription(
         [
-            DeclareLaunchArgument("arm_namespace", default_value="rebotarm_rs"),
+            DeclareLaunchArgument("arm_namespace", default_value="rebot_arm_rs_sim"),
             DeclareLaunchArgument("input_topic", default_value=""),
             DeclareLaunchArgument("output_topic", default_value=""),
             DeclareLaunchArgument("model_path", default_value=""),

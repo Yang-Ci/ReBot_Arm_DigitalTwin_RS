@@ -4,7 +4,7 @@ set -euo pipefail
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/rs_env.sh"
 
-REBOTARM_MIRROR_NAMESPACE="${REBOTARM_MIRROR_NAMESPACE:-rebotarm}"
+REBOTARM_MIRROR_NAMESPACE="${REBOTARM_MIRROR_NAMESPACE:-rebot_arm_rs}"
 
 if ! ros2 topic info "/${REBOTARM_MIRROR_NAMESPACE}/joint_states" >/dev/null 2>&1; then
   echo "Warning: /${REBOTARM_MIRROR_NAMESPACE}/joint_states is not visible yet." >&2

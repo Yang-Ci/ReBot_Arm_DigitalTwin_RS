@@ -26,7 +26,7 @@ Modes:
 
 ```bash
 ros2 launch rebotarm_mujoco_rs mujoco_rs.launch.py \
-  arm_namespace:=rebotarm_rs simulation_mode:=physics use_viewer:=true
+  arm_namespace:=rebot_arm_rs_sim simulation_mode:=physics use_viewer:=true
 ```
 
 ## TCP marker visibility
@@ -74,7 +74,7 @@ ros2 param set /rebotarm_rs_mujoco wrist_camera_model uvc32
 Switching changes only visual camera geometry and the wrist RGB pose. It
 preserves joint positions, targets, grasp objects and simulation time. Both ROS
 image renderers receive the selected model through the transient-local
-`/rebotarm_rs/mujoco/wrist_camera_model` topic, including renderers started later.
+`/rebot_arm_rs_sim/mujoco/wrist_camera_model` topic, including renderers started later.
 Wrist image and CameraInfo topic names remain stable across selections.
 
 Use `enable_camera_selector:=false` (or `REBOTARM_CAMERA_SELECTOR=false`) to
@@ -86,17 +86,17 @@ See [model sources and regeneration](models/THIRD_PARTY_MODELS.md).
 
 Important topics:
 
-- `/rebotarm_rs/mujoco/object_states`
-- `/rebotarm_rs/mujoco/overhead_rgb/image_raw`
-- `/rebotarm_rs/mujoco/wrist_rgb/image_raw`
-- `/rebotarm_rs/mujoco/wrist_rgb/camera_info`
-- `/rebotarm_rs/vision/color_blocks/detections`
+- `/rebot_arm_rs_sim/mujoco/object_states`
+- `/rebot_arm_rs_sim/mujoco/overhead_rgb/image_raw`
+- `/rebot_arm_rs_sim/mujoco/wrist_rgb/image_raw`
+- `/rebot_arm_rs_sim/mujoco/wrist_rgb/camera_info`
+- `/rebot_arm_rs_sim/vision/color_blocks/detections`
 
 Task endpoints:
 
-- `/rebotarm_rs/move_to_pose_ik`
-- `/rebotarm_rs/move_to_pose`
-- `/rebotarm_rs/follow_joint_trajectory`
+- `/rebot_arm_rs_sim/move_to_pose_ik`
+- `/rebot_arm_rs_sim/move_to_pose`
+- `/rebot_arm_rs_sim/follow_joint_trajectory`
 
 The UVC32 bracket is generated from official STEP CAD. Its 32×32 mm board
 and lens are schematic simulation geometry; the nominal optical frame and

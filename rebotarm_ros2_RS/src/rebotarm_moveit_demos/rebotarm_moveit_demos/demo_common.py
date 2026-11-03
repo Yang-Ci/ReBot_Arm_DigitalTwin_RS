@@ -36,7 +36,7 @@ class MoveItDemoBase:
         )
         self.node.create_subscription(
             JointState,
-            "/rebotarm/joint_states",
+            "/rebot_arm_rs/joint_states",
             self._joint_state_cb,
             qos_profile_sensor_data,
         )
@@ -91,7 +91,7 @@ class MoveItDemoBase:
         ):
             if time.monotonic() >= deadline:
                 self.node.get_logger().warn(
-                    "Timed out waiting for /joint_states or /rebotarm/joint_states; "
+                    "Timed out waiting for /joint_states or /rebot_arm_rs/joint_states; "
                     f"using configured {fallback_name}"
                 )
                 return fallback_values

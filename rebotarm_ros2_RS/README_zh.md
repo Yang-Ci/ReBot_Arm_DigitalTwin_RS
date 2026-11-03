@@ -48,7 +48,7 @@
 
 ## 核心功能
 
-- 发布机械臂状态：`/rebotarm/joint_states`、`/rebotarm/arm_status`
+- 发布机械臂状态：`/rebot_arm_rs/joint_states`、`/rebot_arm_rs/arm_status`
 - 提供基础服务：`enable`、`disable`、`set_zero`、`safe_home`
 - 支持笛卡尔目标：`MoveToPoseIK` service、`MoveToPose` action
 - 支持标准轨迹接口：`control_msgs/action/FollowJointTrajectory`
@@ -247,13 +247,13 @@ source install/setup.bash
 1. 使能机械臂：
 
 ```bash
-ros2 service call /rebotarm/enable std_srvs/srv/Trigger
+ros2 service call /rebot_arm_rs/enable std_srvs/srv/Trigger
 ```
 
 2. 移动末端到目标 pose：
 
 ```bash
-ros2 action send_goal /rebotarm/move_to_pose rebotarm_msgs/action/MoveToPose \
+ros2 action send_goal /rebot_arm_rs/move_to_pose rebotarm_msgs/action/MoveToPose \
   "{target_pose: {position: {x: 0.30, y: 0.0, z: 0.30}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}, duration: 2.0}"
 ```
 
@@ -263,13 +263,13 @@ ros2 action send_goal /rebotarm/move_to_pose rebotarm_msgs/action/MoveToPose \
 3. 闭合夹爪并回到安全零位：
 
 ```bash
-ros2 service call /rebotarm/safe_home std_srvs/srv/Trigger
+ros2 service call /rebot_arm_rs/safe_home std_srvs/srv/Trigger
 ```
 
 4. 失能并退出：
 
 ```bash
-ros2 service call /rebotarm/disable std_srvs/srv/Trigger
+ros2 service call /rebot_arm_rs/disable std_srvs/srv/Trigger
 ```
 
 ---
@@ -327,18 +327,18 @@ ros2 run rebotarmcontroller MoveToPose -- --x 0.30 --y 0.0 --z 0.30 --qw 1.0 --d
 ros2 run rebotarmcontroller GravityCompensation
 ```
 
-脚本启动时会先调用 `/rebotarm/enable`，再启动重力补偿。按 `Ctrl+C` 退出时，
-脚本会依次调用 `/rebotarm/gravity_compensation/stop`、`/rebotarm/safe_home`
-和 `/rebotarm/disable`，让机械臂回到安全零位后失能。
+脚本启动时会先调用 `/rebot_arm_rs/enable`，再启动重力补偿。按 `Ctrl+C` 退出时，
+脚本会依次调用 `/rebot_arm_rs/gravity_compensation/stop`、`/rebot_arm_rs/safe_home`
+和 `/rebot_arm_rs/disable`，让机械臂回到安全零位后失能。
 
 对应底层服务：
 
 ```bash
-ros2 service call /rebotarm/enable std_srvs/srv/Trigger
-ros2 service call /rebotarm/gravity_compensation/start std_srvs/srv/Trigger
-ros2 service call /rebotarm/gravity_compensation/stop std_srvs/srv/Trigger
-ros2 service call /rebotarm/safe_home std_srvs/srv/Trigger
-ros2 service call /rebotarm/disable std_srvs/srv/Trigger
+ros2 service call /rebot_arm_rs/enable std_srvs/srv/Trigger
+ros2 service call /rebot_arm_rs/gravity_compensation/start std_srvs/srv/Trigger
+ros2 service call /rebot_arm_rs/gravity_compensation/stop std_srvs/srv/Trigger
+ros2 service call /rebot_arm_rs/safe_home std_srvs/srv/Trigger
+ros2 service call /rebot_arm_rs/disable std_srvs/srv/Trigger
 ```
 
 ### gripper_control.py
@@ -365,7 +365,7 @@ q / quit    退出
 其中包含：
 
 - topic、service、action 的完整列表和类型
-- `/rebotarm` 命名空间、QoS、单位和状态机约定
+- `/rebot_arm_rs` 命名空间、QoS、单位和状态机约定
 - `JointMitCmd`、`JointPosVelCmd`、`ArmStatus`、`MoveToPose` 等自定义接口说明
 - 末端位姿移动、夹爪控制、重力补偿、低层 command 的调用示例
 - 上层集成和多机械臂命名注意事项
@@ -388,9 +388,9 @@ q / quit    退出
 | `hardware_config` | bringup 内置 `rebotarm_hardware.yaml` | ROS2 上层硬件配置路径 |
 | `model` | 空字符串 | 留空使用 `default_model`，可设为 `dm` 或 `rs` |
 | `channel` | 空字符串 | 留空使用 YAML，非空时覆盖通信通道 |
-| `joint_state_rate` | `100.0` | `/rebotarm/joint_states` 发布频率 |
+| `joint_state_rate` | `100.0` | `/rebot_arm_rs/joint_states` 发布频率 |
 | `cmd_arbitration` | `reject` | 轨迹运行中 arm joint 低层 cmd 仲裁，`reject` 或 `preempt`；gripper 低层 cmd 不抢占 arm 轨迹 |
-| `arm_namespace` | `rebotarm` | ROS 命名空间前缀 |
+| `arm_namespace` | `rebot_arm_rs` | ROS 命名空间前缀 |
 | `frame_id` | `base_link` | 机械臂基座坐标系，预留给 TF、视觉和规划集成 |
 | `ee_frame_id` | `end_link` | 末端坐标系，预留给 TF、视觉和规划集成 |
 | `use_rviz` | `false` | 是否启动 bringup RViz |

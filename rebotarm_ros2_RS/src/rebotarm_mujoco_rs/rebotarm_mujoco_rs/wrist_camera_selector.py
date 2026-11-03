@@ -15,7 +15,7 @@ LABELS = {"d405": "RealSense D405", "d435i": "RealSense D435i", "gemini2": "Orbb
 class WristCameraSelector(Node):
     def __init__(self):
         super().__init__("rebotarm_rs_wrist_camera_selector")
-        self.declare_parameter("arm_namespace", "rebotarm_rs")
+        self.declare_parameter("arm_namespace", "rebot_arm_rs_sim")
         self.declare_parameter("simulation_node", "/rebotarm_rs_mujoco")
         namespace = str(self.get_parameter("arm_namespace").value).strip("/")
         self.client = AsyncParameterClient(self, str(self.get_parameter("simulation_node").value))

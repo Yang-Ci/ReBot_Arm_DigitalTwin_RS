@@ -22,7 +22,7 @@ pick_place:
 
     use_gripper: true
     gripper_action_name: /gripper_controller/follow_joint_trajectory
-    hardware_gripper_action_name: /rebotarm/gripper/command
+    hardware_gripper_action_name: /rebot_arm_rs/gripper/command
     gripper_joint_names:
       - gripper_joint1
       - gripper_joint2

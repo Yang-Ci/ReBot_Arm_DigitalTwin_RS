@@ -49,7 +49,7 @@ The workspace contains five ROS2 packages:
 
 ## Features
 
-- Publishes arm status: `/rebotarm/joint_states`, `/rebotarm/arm_status`
+- Publishes arm status: `/rebot_arm_rs/joint_states`, `/rebot_arm_rs/arm_status`
 - Provides core services: `enable`, `disable`, `set_zero`, `safe_home`
 - Supports Cartesian targets: `MoveToPoseIK` service, `MoveToPose` action
 - Supports the standard `control_msgs/action/FollowJointTrajectory` interface
@@ -259,13 +259,13 @@ source install/setup.bash
 1. Enable the arm:
 
 ```bash
-ros2 service call /rebotarm/enable std_srvs/srv/Trigger
+ros2 service call /rebot_arm_rs/enable std_srvs/srv/Trigger
 ```
 
 2. Move the TCP to a target pose:
 
 ```bash
-ros2 action send_goal /rebotarm/move_to_pose rebotarm_msgs/action/MoveToPose \
+ros2 action send_goal /rebot_arm_rs/move_to_pose rebotarm_msgs/action/MoveToPose \
   "{target_pose: {position: {x: 0.30, y: 0.0, z: 0.30}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}, duration: 2.0}"
 ```
 
@@ -276,13 +276,13 @@ defaults to `mit`.
 3. Close the gripper and return to safe home:
 
 ```bash
-ros2 service call /rebotarm/safe_home std_srvs/srv/Trigger
+ros2 service call /rebot_arm_rs/safe_home std_srvs/srv/Trigger
 ```
 
 4. Disable the arm:
 
 ```bash
-ros2 service call /rebotarm/disable std_srvs/srv/Trigger
+ros2 service call /rebot_arm_rs/disable std_srvs/srv/Trigger
 ```
 
 ---
@@ -338,9 +338,9 @@ ros2 run rebotarmcontroller MoveToPose -- --x 0.30 --y 0.0 --z 0.30 --qw 1.0 --d
 ros2 run rebotarmcontroller GravityCompensation
 ```
 
-The script calls `/rebotarm/enable`, starts gravity compensation, then on
-`Ctrl+C` calls `/rebotarm/gravity_compensation/stop`, `/rebotarm/safe_home` and
-`/rebotarm/disable`.
+The script calls `/rebot_arm_rs/enable`, starts gravity compensation, then on
+`Ctrl+C` calls `/rebot_arm_rs/gravity_compensation/stop`, `/rebot_arm_rs/safe_home` and
+`/rebot_arm_rs/disable`.
 
 ### gripper_control.py
 
@@ -365,7 +365,7 @@ The full ROS2 API is documented in [API_zh.md](API_zh.md).
 It includes:
 
 - Topics, services and actions with their message types
-- `/rebotarm` namespace, QoS, units and state machine conventions
+- `/rebot_arm_rs` namespace, QoS, units and state machine conventions
 - Custom interfaces such as `JointMitCmd`, `JointPosVelCmd`, `ArmStatus` and `MoveToPose`
 - Examples for TCP motion, gripper control, gravity compensation and raw commands
 - Integration notes for higher-level applications and multi-arm setups
@@ -388,9 +388,9 @@ Common launch parameters:
 | `hardware_config` | built-in `rebotarm_hardware.yaml` | ROS2 hardware config path |
 | `model` | empty string | Use `default_model` when empty; set `dm` or `rs` explicitly |
 | `channel` | empty string | Use YAML value when empty; override communication channel when set |
-| `joint_state_rate` | `100.0` | Publish rate for `/rebotarm/joint_states` |
+| `joint_state_rate` | `100.0` | Publish rate for `/rebot_arm_rs/joint_states` |
 | `cmd_arbitration` | `reject` | Low-level command arbitration during arm trajectory execution |
-| `arm_namespace` | `rebotarm` | ROS namespace prefix |
+| `arm_namespace` | `rebot_arm_rs` | ROS namespace prefix |
 | `frame_id` | `base_link` | Base frame ID reserved for TF, perception and planning |
 | `ee_frame_id` | `end_link` | End-effector frame ID reserved for TF, perception and planning |
 | `use_rviz` | `false` | Start bringup RViz |

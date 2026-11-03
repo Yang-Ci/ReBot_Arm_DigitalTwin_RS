@@ -80,7 +80,7 @@ class DemoMoveToPose(Node):
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--namespace", default="rebotarm")
+    parser.add_argument("--namespace", default="rebot_arm_rs")
     parser.add_argument("--x", type=float, default=0.30)
     parser.add_argument("--y", type=float, default=0.0)
     parser.add_argument("--z", type=float, default=0.30)

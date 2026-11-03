@@ -93,7 +93,7 @@ def generate_launch_description():
             DeclareLaunchArgument("joint_state_rate", default_value="100.0"),
             DeclareLaunchArgument("hardware_feedback_poll_rate", default_value="100.0"),
             DeclareLaunchArgument("cmd_arbitration", default_value="reject"),
-            DeclareLaunchArgument("arm_namespace", default_value="rebotarm"),
+            DeclareLaunchArgument("arm_namespace", default_value="rebot_arm_rs"),
             DeclareLaunchArgument("use_rviz", default_value="false"),
             DeclareLaunchArgument("frame_id", default_value="base_link"),
             DeclareLaunchArgument("ee_frame_id", default_value="gripper_end"),

@@ -56,6 +56,9 @@ _VISION_SAFE_GRASP_Z_BY_COLOR_M = {
     "blue": 0.140,
     "yellow": 0.140,
 }
+_STORAGE_ZONES = {"red": (0.49, -0.16, 0.1225), "blue": (0.49, 0.0, 0.119), "yellow": (0.49, 0.16, 0.126)}
+_FEEDBACK_MAX_AGE_SEC = 1.0
+_VISION_MAX_AGE_SEC = 0.8
 
 
 class _MissingFastMCP:
@@ -87,7 +90,7 @@ class ReBotArmToolBridge(Node):
         action_timeout_padding_sec: float,
     ) -> None:
         super().__init__("rebotarm_mcp_bridge")
-        self.namespace = namespace.strip("/") or "rebotarm_rs"
+        self.namespace = namespace.strip("/") or "rebot_arm_rs_sim"
         self.motion_allowed = bool(motion_allowed)
         self.service_timeout_sec = max(float(service_timeout_sec), 0.1)
         self.action_timeout_padding_sec = max(float(action_timeout_padding_sec), 1.0)
@@ -95,6 +98,8 @@ class ReBotArmToolBridge(Node):
         self._lock = threading.RLock()
         self._joint_state: dict[str, Any] | None = None
         self._joint_state_at = 0.0
+        self._mujoco_joint_state: dict[str, Any] | None = None
+        self._mujoco_joint_state_at = 0.0
         self._arm_status: dict[str, Any] | None = None
         self._arm_status_at = 0.0
         self._gripper_state: dict[str, Any] | None = None
@@ -149,6 +154,13 @@ class ReBotArmToolBridge(Node):
             self._joint_state_callback,
             qos_profile_sensor_data,
         )
+        if self.namespace == "rebot_arm_rs_sim":
+            self.create_subscription(
+                JointState,
+                f"/{self.namespace}/mujoco/joint_states",
+                self._mujoco_joint_state_callback,
+                qos_profile_sensor_data,
+            )
         self.create_subscription(
             ArmStatus,
             f"/{self.namespace}/arm_status",
@@ -171,7 +183,8 @@ class ReBotArmToolBridge(Node):
     def _srv(self, name: str) -> str:
         return f"/{self.namespace}/{name}"
 
-    def _joint_state_callback(self, msg: JointState) -> None:
+    @staticmethod
+    def _joint_state_dict(msg: JointState) -> dict[str, Any]:
         positions = {}
         velocities = {}
         efforts = {}
@@ -182,14 +195,24 @@ class ReBotArmToolBridge(Node):
                 velocities[name] = float(msg.velocity[index])
             if index < len(msg.effort):
                 efforts[name] = float(msg.effort[index])
-        with self._lock:
-            self._joint_state = {
+        return {
                 "names": list(msg.name),
                 "positions": positions,
                 "velocities": velocities,
                 "efforts": efforts,
-            }
+        }
+
+    def _joint_state_callback(self, msg: JointState) -> None:
+        state = self._joint_state_dict(msg)
+        with self._lock:
+            self._joint_state = state
             self._joint_state_at = time.monotonic()
+
+    def _mujoco_joint_state_callback(self, msg: JointState) -> None:
+        state = self._joint_state_dict(msg)
+        with self._lock:
+            self._mujoco_joint_state = state
+            self._mujoco_joint_state_at = time.monotonic()
 
     def _arm_status_callback(self, msg: ArmStatus) -> None:
         with self._lock:
@@ -231,18 +254,30 @@ class ReBotArmToolBridge(Node):
     def get_status(self) -> dict[str, Any]:
         with self._lock:
             now = time.monotonic()
+            actual_positions = self._current_joint_positions()
+            mujoco_positions = (self._mujoco_joint_state or {}).get("positions") or {}
+            use_mujoco = (
+                self.namespace == "rebot_arm_rs_sim" and actual_positions is not None
+                and self._mujoco_joint_state_at > 0
+                and now - self._mujoco_joint_state_at <= _FEEDBACK_MAX_AGE_SEC
+                and all(name in mujoco_positions and math.isfinite(float(mujoco_positions[name])) for name in _ARM_JOINTS)
+            )
             return {
                 "ok": True,
                 "namespace": self.namespace,
                 "motion_mode": "allow" if self.motion_allowed else "locked",
                 "topics": {
                     "joint_states_age_sec": self._age(now, self._joint_state_at),
+                    "mujoco_joint_states_age_sec": self._age(now, self._mujoco_joint_state_at),
                     "arm_status_age_sec": self._age(now, self._arm_status_at),
                     "gripper_state_age_sec": self._age(now, self._gripper_state_at),
                     "vision_age_sec": self._age(now, self._vision_payload_at),
                 },
                 "arm_status": self._arm_status,
-                "joint_state": self._joint_state,
+                "joint_state": self._mujoco_joint_state if use_mujoco else self._joint_state,
+                "joint_state_source": "mujoco" if use_mujoco else "driver",
+                "driver_joint_state": self._joint_state,
+                "mujoco_joint_state": self._mujoco_joint_state,
                 "gripper_state": self._gripper_state,
                 "vision": self._vision_summary_locked(now),
             }
@@ -438,10 +473,13 @@ class ReBotArmToolBridge(Node):
         duration: float,
         *,
         tool: str,
+        strict_ik: bool = False,
     ) -> dict[str, Any]:
         ik = self._solve_pose_ik(pose, tool=f"{tool}.ik")
         if not ik.get("ok"):
             return ik
+        if strict_ik and not ik.get("ros_success"):
+            return {**ik, "ok": False, "message": f"Target unreachable: {ik.get('message', '')}"}
 
         q_solution = ik.get("q_solution")
         if not isinstance(q_solution, list) or len(q_solution) < len(_ARM_JOINTS):
@@ -651,6 +689,11 @@ class ReBotArmToolBridge(Node):
             payload = self._copy_jsonable(self._vision_payload)
             age = self._age(now, self._vision_payload_at)
 
+        if payload and age is not None:
+            source_age = self._finite_float(payload.get("age_sec"), 0.0)
+            if source_age >= 0:
+                age += source_age
+
         if not payload:
             return {
                 "ok": False,
@@ -722,6 +765,7 @@ class ReBotArmToolBridge(Node):
                     plan["transit_pose"],
                     max(duration, 1.4),
                     tool="pick_color.high_align",
+                    strict_ik=plan["storage_pick"],
                 ),
             ),
             (
@@ -730,6 +774,7 @@ class ReBotArmToolBridge(Node):
                     plan["vertical_align_pose"],
                     max(duration * 0.75, 0.9),
                     tool="pick_color.vertical_align",
+                    strict_ik=plan["storage_pick"],
                 ),
             ),
             (
@@ -738,6 +783,7 @@ class ReBotArmToolBridge(Node):
                     plan["pregrasp_pose"],
                     max(duration * 0.6, 0.8),
                     tool="pick_color.pregrasp",
+                    strict_ik=plan["storage_pick"],
                 ),
             ),
             (
@@ -746,6 +792,7 @@ class ReBotArmToolBridge(Node):
                     plan["grasp_pose"],
                     max(duration * 0.65, 0.9),
                     tool="pick_color.move_down",
+                    strict_ik=plan["storage_pick"],
                 ),
             ),
             (
@@ -759,19 +806,12 @@ class ReBotArmToolBridge(Node):
                 lambda: self._sleep_step("pick_color.settle_after_close", 1.6),
             ),
             (
-                "attach_object_animation",
-                lambda: self._publish_sim_animation(
-                    "attach_object",
-                    target=target,
-                    source_tool="pick_color",
-                ),
-            ),
-            (
                 "first_lift",
                 lambda: self._move_to_pose_via_ik_trajectory(
                     plan["first_lift_pose"],
                     max(duration * 0.75, 1.1),
                     tool="pick_color.first_lift",
+                    strict_ik=plan["storage_pick"],
                 ),
             ),
             (
@@ -780,6 +820,7 @@ class ReBotArmToolBridge(Node):
                     plan["lift_pose"],
                     max(duration, 1.2),
                     tool="pick_color.lift",
+                    strict_ik=plan["storage_pick"],
                 ),
             ),
         ]:
@@ -788,7 +829,16 @@ class ReBotArmToolBridge(Node):
                     str(target.get("color") or color),
                     timeout_sec=0.35,
                 )
-                refined_target = refined.get("target") if refined.get("ok") else None
+                if not refined.get("ok"):
+                    return {
+                        "ok": False,
+                        "tool": "pick_color",
+                        "target": target,
+                        "failed_step": "refresh_detection",
+                        "message": "Fresh target detection unavailable; stopped before descent.",
+                        "steps": steps,
+                    }
+                refined_target = refined.get("target")
                 if isinstance(refined_target, dict) and self._target_shifted(
                     target, refined_target, 0.008
                 ):
@@ -834,6 +884,8 @@ class ReBotArmToolBridge(Node):
                 "final_target": verified_target,
                 "steps": steps,
             }
+
+        self._publish_sim_animation("attach_object", target=verified_target, source_tool="pick_color")
 
         return {
             "ok": True,
@@ -922,12 +974,17 @@ class ReBotArmToolBridge(Node):
 
     def _current_joint_positions(self) -> dict[str, float] | None:
         with self._lock:
-            if not self._joint_state:
-                return None
-            positions = self._joint_state.get("positions") or {}
-            if not all(name in positions for name in _ARM_JOINTS):
-                return None
-            return {name: float(positions[name]) for name in _ARM_JOINTS}
+            now = time.monotonic()
+            candidates = [(self._joint_state, self._joint_state_at)]
+            if self.namespace == "rebot_arm_rs_sim":
+                candidates.insert(0, (self._mujoco_joint_state, self._mujoco_joint_state_at))
+            for state, received_at in candidates:
+                if not state or not received_at or now - received_at > _FEEDBACK_MAX_AGE_SEC:
+                    continue
+                positions = state.get("positions") or {}
+                if all(name in positions and math.isfinite(float(positions[name])) for name in _ARM_JOINTS):
+                    return {name: float(positions[name]) for name in _ARM_JOINTS}
+            return None
 
     def _vision_summary_locked(self, now: float) -> dict[str, Any]:
         if self._vision_parse_error:
@@ -980,11 +1037,11 @@ class ReBotArmToolBridge(Node):
             result = self.detect_blocks(preferred_color)
             if result.get("ok") and isinstance(result.get("target"), dict):
                 age = result.get("age_sec")
-                if age is None or float(age) <= 0.8:
+                if age is not None and float(age) <= _VISION_MAX_AGE_SEC:
                     return result
             last = result
             time.sleep(0.08)
-        return last
+        return {"ok": False, "tool": "detect_blocks", "message": "No fresh color detection available.", "age_sec": last.get("age_sec")}
 
     def _build_pick_plan(
         self,
@@ -1001,6 +1058,10 @@ class ReBotArmToolBridge(Node):
         yaw_rad = float(grasp["yaw_rad"])
 
         detected_z = self._finite_float(target.get("z"), 0.122)
+        zone = _STORAGE_ZONES.get(color)
+        storage_pick = bool(self.namespace == "rebot_arm_rs_sim" and zone and
+                            math.hypot(x - zone[0], y - zone[1]) <= 0.055 and
+                            abs(detected_z - zone[2]) <= 0.035)
         safe_grasp_z = max(
             _VISION_SAFE_GRASP_Z_BY_COLOR_M.get(color, 0.122), detected_z
         )
@@ -1036,10 +1097,23 @@ class ReBotArmToolBridge(Node):
             0.35,
         )
 
+        if storage_pick:
+            approach_z = max(approach_z, detected_z + 0.10)
+            lift_z = max(lift_z, detected_z + 0.13)
+            first_lift_z = lift_z
+            # Match the reachable web route: approach and lift at 50 degrees,
+            # then descend directly at 65 degrees to the object.
+            vertical_align_z = approach_z
+            pregrasp_z = grasp_z
+        pose = lambda z, pitch: self._pitched_pose(x, y, z, yaw_rad, pitch)
+        transit_pitch = math.radians(50) if storage_pick else math.pi / 2
+        grasp_pitch = math.radians(65) if storage_pick else math.pi / 2
+
         return {
             "x": x,
             "y": y,
             "color": color,
+            "storage_pick": storage_pick,
             "yaw_rad": yaw_rad,
             "approach_z": approach_z,
             "grasp_z": grasp_z,
@@ -1047,12 +1121,12 @@ class ReBotArmToolBridge(Node):
             "lift_z": lift_z,
             "close_opening_mm": float(grasp["command_mm"]),
             "physical_gap_mm": float(grasp["physical_gap_m"]) * 1000.0,
-            "transit_pose": self._top_down_pose(x, y, approach_z, yaw_rad),
-            "vertical_align_pose": self._top_down_pose(x, y, vertical_align_z, yaw_rad),
-            "pregrasp_pose": self._top_down_pose(x, y, pregrasp_z, yaw_rad),
-            "grasp_pose": self._top_down_pose(x, y, grasp_z, yaw_rad),
-            "first_lift_pose": self._top_down_pose(x, y, first_lift_z, yaw_rad),
-            "lift_pose": self._top_down_pose(x, y, lift_z, yaw_rad),
+            "transit_pose": pose(approach_z, transit_pitch),
+            "vertical_align_pose": pose(vertical_align_z, transit_pitch),
+            "pregrasp_pose": pose(pregrasp_z, grasp_pitch),
+            "grasp_pose": pose(grasp_z, grasp_pitch),
+            "first_lift_pose": pose(first_lift_z, transit_pitch),
+            "lift_pose": pose(lift_z, transit_pitch),
         }
 
     @staticmethod
@@ -1185,18 +1259,23 @@ class ReBotArmToolBridge(Node):
 
     @staticmethod
     def _top_down_pose(x: float, y: float, z: float, yaw_rad: float) -> Pose:
+        return ReBotArmToolBridge._pitched_pose(x, y, z, yaw_rad, math.pi / 2)
+
+    @staticmethod
+    def _pitched_pose(x: float, y: float, z: float, yaw_rad: float, pitch: float) -> Pose:
         yaw = yaw_rad if math.isfinite(float(yaw_rad)) else 0.0
         sy = math.sin(yaw / 2.0)
         cy = math.cos(yaw / 2.0)
-        s90 = math.sqrt(0.5)
+        sp = math.sin(pitch / 2)
+        cp = math.cos(pitch / 2)
         return ReBotArmToolBridge._pose_from_xyz_quat(
             x,
             y,
             z,
-            qx=-sy * s90,
-            qy=cy * s90,
-            qz=sy * s90,
-            qw=cy * s90,
+            qx=-sy * sp,
+            qy=cy * sp,
+            qz=sy * cp,
+            qw=cy * cp,
         )
 
     @staticmethod
@@ -1474,7 +1553,7 @@ def _parse_args(argv: list[str] | None = None) -> tuple[argparse.Namespace, list
     parser = argparse.ArgumentParser(description="Run the reBotArm MCP server.")
     parser.add_argument(
         "--namespace",
-        default=os.getenv("REBOTARM_NAMESPACE", "rebotarm_rs"),
+        default=os.getenv("REBOTARM_NAMESPACE", "rebot_arm_rs_sim"),
         help="ROS namespace without a leading slash.",
     )
     parser.add_argument(

@@ -29,7 +29,7 @@ class RsSceneCamera(Node):
 
     def __init__(self) -> None:
         super().__init__("rebotarm_rs_scene_camera")
-        self.declare_parameter("arm_namespace", "rebotarm_rs")
+        self.declare_parameter("arm_namespace", "rebot_arm_rs_sim")
         self.declare_parameter("model_path", "")
         self.declare_parameter("wrist_camera_model", "d405")
         self.declare_parameter("joint_state_topic", "")

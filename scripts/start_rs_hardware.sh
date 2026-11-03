@@ -175,7 +175,7 @@ ip -details link show can0
 exec ros2 launch rebotarm_bringup bringup.launch.py \
   model:=rs \
   channel:=can0 \
-  arm_namespace:=rebotarm \
+  arm_namespace:=rebot_arm_rs \
   ee_frame_id:=gripper_end \
   joint_state_rate:="${REBOTARM_JOINT_STATE_RATE:-60.0}" \
   hardware_feedback_poll_rate:="${REBOTARM_HARDWARE_FEEDBACK_POLL_RATE:-20.0}" \

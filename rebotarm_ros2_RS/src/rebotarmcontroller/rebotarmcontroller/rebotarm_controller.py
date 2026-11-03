@@ -27,7 +27,7 @@ class reBotArmController(Node):
         self.declare_parameter("channel", "")
         self.declare_parameter("joint_state_rate", 100.0)
         self.declare_parameter("hardware_feedback_poll_rate", 100.0)
-        self.declare_parameter("arm_namespace", "rebotarm")
+        self.declare_parameter("arm_namespace", "rebot_arm_rs")
         self.declare_parameter("cmd_arbitration", "reject")
         self.declare_parameter("frame_id", "base_link")
         self.declare_parameter("ee_frame_id", "end_link")
@@ -36,7 +36,7 @@ class reBotArmController(Node):
         hardware_config = self.get_parameter("hardware_config").value or None
         model = str(self.get_parameter("model").value or "")
         channel = str(self.get_parameter("channel").value or "")
-        self.arm_namespace = str(self.get_parameter("arm_namespace").value or "rebotarm").strip("/")
+        self.arm_namespace = str(self.get_parameter("arm_namespace").value or "rebot_arm_rs").strip("/")
         joint_state_rate = float(self.get_parameter("joint_state_rate").value)
         hardware_feedback_poll_rate = float(
             self.get_parameter("hardware_feedback_poll_rate").value
