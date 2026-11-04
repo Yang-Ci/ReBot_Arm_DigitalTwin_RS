@@ -16,7 +16,10 @@ class FakeLeaderHardware:
         self._teleop_lease = TeleopLease()
         self.teleop_limits = DEFAULT_LIMITS
         configured_speed = float(getattr(node, "max_joint_speed", 1.0))
-        self.teleop_speed_max = max(0.05, min(1.0, configured_speed))
+        # The fake driver uses zero to disable its general joint speed limit.
+        # Leader control still needs a finite ceiling in that configuration.
+        self.teleop_speed_max = (1.0 if configured_speed <= 0.0
+                                 else max(0.05, min(1.0, configured_speed)))
         self.gripper_close_position = 0.0
         self.gripper_open_position = node.gripper_open_position
         self.has_gripper = True

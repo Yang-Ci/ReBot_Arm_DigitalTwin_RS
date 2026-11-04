@@ -148,6 +148,16 @@ class LeaderIntegrationTests(unittest.TestCase):
         self.assertEqual(self.node.max_joint_speed, 1.0)
         self.assertTrue(self.request('stop').success)
 
+    def test_unlimited_fake_driver_accepts_default_leader_speed(self):
+        # start_rs_sim.sh defaults the fake driver's speed to zero (unlimited).
+        self.node.max_joint_speed = 0.0
+        hw = FakeLeaderHardware(self.node)
+        self.assertEqual(hw.teleop_speed_max, 1.0)
+        token = hw.teleop_acquire()
+        hw.teleop_send(token, 1, time.monotonic(), self.node.positions, None, 1.0)
+        self.assertEqual(self.node.max_joint_speed, 1.0)
+        hw.teleop_stop(token)
+
     def test_fake_gripper_preserves_slow_speed_scaling_and_caps_fast_follow(self):
         token = self.hw.teleop_acquire()
         for seq, (speed, expected) in enumerate([(0.1, 0.6), (0.3, 1.8), (1.0, 3.0)]):

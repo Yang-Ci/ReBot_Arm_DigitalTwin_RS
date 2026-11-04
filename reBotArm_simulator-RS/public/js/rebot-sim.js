@@ -1458,7 +1458,9 @@
       return;
     }
     if (teachingRecording && teachingSource === 'hardware') {
-      updateTeachingStatus('真机示教中，请先结束真机示教');
+      // Both visible stop-recording buttons must finish the hardware session
+      // through the ROS controller, which stops gravity compensation and homes.
+      window.dispatchEvent(new CustomEvent('rebot-hardware-teach-finish'));
       return;
     }
     if (teachingRecording) {

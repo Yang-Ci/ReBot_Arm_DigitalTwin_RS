@@ -326,6 +326,9 @@
    if (client.socket) client.socket.close();
  });
  els.teachHardwareRecord?.addEventListener('click', toggleHardwareTeaching);
+ window.addEventListener('rebot-hardware-teach-finish', () => {
+   if (hardwareTeachActive) void toggleHardwareTeaching();
+ });
  els.enable.addEventListener('click', () => guardedCall(() => client.enable(), t('msg.reqEnable')));
  els.disable.addEventListener('click', () => {
    void stopHardwareTeaching(true).finally(() => {
