@@ -53,7 +53,7 @@ models:
         kd: 1.0
 
         # compliant gravity compensation so switching modes has no torque step.
-        tau_scale: [1.0, 0.92, 0.98, 1.0, 1.0, 1.0]
+        tau_scale: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         # 0 disables the ROS-side clamp; the motor driver still enforces its
         # own model-specific torque limits.
         torque_limit: 0.0
