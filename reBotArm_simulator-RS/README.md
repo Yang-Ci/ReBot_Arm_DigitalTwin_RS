@@ -13,7 +13,8 @@ URDF/STL；目录内的 `description` 只作为网页被单独复制时的离线
 | RS ROS 2 Fake Driver | 可用，命名空间 `/rebot_arm_rs_sim` |
 | RS 真机 ROS 2 Controller | 可用，命名空间 `/rebot_arm_rs` |
 | 新版 `JointPosVelCmd`/`JointMitCmd` | 已适配 |
-| RS 夹爪宽度与电机角度换算 | 已适配，71.5 mm ↔ 5 rad |
+| RS 网页夹爪命令量程 | 0–71.5 mm 对应电机 0–5 rad |
+| RS URDF 模型参数 | 总质量 6.5503 kg，每侧手指 55.9 g，单指滑动行程 0–50 mm |
 | RS MuJoCo 动力学 | 可用，启动脚本默认打开 Viewer 与 physics 模式 |
 | 从零点执行当前姿态 | 可用，默认回零与目标两段各 2 秒 |
 | 目标鬼影生命周期 | 到位或反馈等待超时后自动隐藏 |
