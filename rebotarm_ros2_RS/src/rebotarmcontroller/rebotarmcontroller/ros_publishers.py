@@ -6,7 +6,7 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rebotarm_msgs.msg import ArmStatus, JointMotorState
 from sensor_msgs.msg import JointState
 
-_GRIPPER_MAX_WIDTH = 0.09
+_GRIPPER_FINGER_TRAVEL_M = 0.05
 
 
 def _gripper_motor_to_joint_position(
@@ -16,7 +16,7 @@ def _gripper_motor_to_joint_position(
 ) -> float:
     span = open_position - close_position
     ratio = 0.0 if span == 0.0 else (position - close_position) / span
-    return max(0.0, min(_GRIPPER_MAX_WIDTH * 0.5, ratio * _GRIPPER_MAX_WIDTH * 0.5))
+    return max(0.0, min(_GRIPPER_FINGER_TRAVEL_M, ratio * _GRIPPER_FINGER_TRAVEL_M))
 
 
 class JointStatePublisher:

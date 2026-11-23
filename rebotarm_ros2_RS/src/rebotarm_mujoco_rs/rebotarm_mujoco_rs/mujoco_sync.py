@@ -27,7 +27,6 @@ from .wrist_cameras import CAMERA_MODELS, WristCameraAssemblies
 
 
 _ARM_JOINTS = tuple(f"joint{index}" for index in range(1, 7))
-_RS_ROS_VISUAL_OPEN_M = 0.045
 _LEGACY_VISUAL_OPEN_M = 0.0285
 _MUJOCO_GRIPPER_OPEN_M = 0.05
 _GRASP_SCENE_NAME = "rs_grasp_scene.xml"
@@ -357,7 +356,7 @@ class RsMujocoSync(Node):
 
         if "gripper_joint1" in values:
             self.target_gripper = self._visual_to_mujoco_gripper(
-                values["gripper_joint1"], _RS_ROS_VISUAL_OPEN_M
+                values["gripper_joint1"], _MUJOCO_GRIPPER_OPEN_M
             )
         elif "finger_left" in values:
             self.target_gripper = self._visual_to_mujoco_gripper(

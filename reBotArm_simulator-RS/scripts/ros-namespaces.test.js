@@ -61,7 +61,7 @@ function consoleFixture(target, withPlacementHooks = false) {
         window.__placementTest = {
           safelyPlaceVisionTarget, moveToPoseViaIkTrajectory, buildVisionCarryOffset, buildVisionPickPlan, buildVisionTransitRoute,
           runVisionMoveStep, publishTeachingReplayGripper, publishGripper, forwardJointBatch, forwardSimCommand,
-          getVlim, getSliderDampingMs, getTrajectoryDuration,
+          getVlim, getSliderDampingMs, getTrajectoryDuration, gripperJointFeedback,
           setMocks(m) {
             if (m.move) runVisionMoveStep = m.move;
             if (m.detect) waitForNewVisionTarget = m.detect;
@@ -126,6 +126,17 @@ function safeHomeFixture({ closeFirst, stopGravitySuccess = true } = {}) {
     }
   };
 }
+
+test('RS ROS finger feedback maps the full 50 mm model travel to the web command scale', () => {
+  for (const [target, namespace] of [['hardware', 'rebot_arm_rs'], ['simulation', 'rebot_arm_rs_sim']]) {
+    const { client, placement } = consoleFixture(target, true);
+    const deliver = client._subscriptions.get(`/${namespace}/joint_states`).callback;
+    for (const [travel, commandWidth] of [[0, 0], [0.025, 0.03575], [0.05, 0.0715]]) {
+      deliver({ name: ['gripper_joint1', 'gripper_joint2'], position: [travel, travel] });
+      assert.equal(placement.gripperJointFeedback().widthCommand, commandWidth);
+    }
+  }
+});
 
 test('RS hardware safe home preserves the gripper opening by default', async () => {
   const ui = safeHomeFixture();

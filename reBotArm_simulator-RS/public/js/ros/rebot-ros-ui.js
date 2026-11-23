@@ -203,6 +203,7 @@
  const HARDWARE_FEEDBACK_DERIVATIVE_CUTOFF_HZ = 1.0;
  const MIRROR_HOLD_MS = 1800;
  let latestJointPositions = null;
+ let latestRosFingerState = null;
  let rosBackend = 'unknown';
  let latestArmEnabled = false;
  let armStatusSeen = false;
@@ -484,6 +485,13 @@
     if (!window.reBotSim || !Array.isArray(msg.name) || !Array.isArray(msg.position)) return;
     const next = jointAnglesFromState(msg);
     const useDriverState = TARGET_KEY !== 'simulation' || !mujocoStateIsFresh();
+    if (useDriverState) {
+      const finger = msg.name.findIndex((name) => String(name).toLowerCase().endsWith('gripper_joint1'));
+      const position = finger >= 0 ? Number(msg.position[finger]) : NaN;
+      if (Number.isFinite(position)) {
+        latestRosFingerState = { position, stamp: performance.now() };
+      }
+    }
 
     if (hardwareTeachActive && typeof window.reBotSim.appendHardwareTeachingSample === 'function') {
       window.reBotSim.appendHardwareTeachingSample(
@@ -2312,6 +2320,7 @@
   function resetRosTargetState() {
     armStatusSeen = false;
     rosTargetReady = false;
+    latestRosFingerState = null;
     rosBackend = 'unknown';
     latestArmEnabled = false;
     listedTopics.clear();
@@ -3905,24 +3914,22 @@
   }
 
   function gripperJointFeedback() {
+    if (latestRosFingerState) {
+      const { position, stamp } = latestRosFingerState;
+      return {
+        fresh: performance.now() - stamp < 700,
+        widthCommand: fingerOpeningToGripperCommand(position, GRIPPER_FINGER_TRAVEL_M),
+        stamp
+      };
+    }
     const source = latestJointPositions || {};
-    const hasRsJoint = Number.isFinite(Number(source.gripper_joint1));
-    const left = hasRsJoint ? Number(source.gripper_joint1) : Number(source.finger_left);
+    const left = Number(source.finger_left);
     if (!Number.isFinite(left)) {
       return { fresh: false, widthCommand: NaN, stamp: 0 };
     }
-    // /mujoco/joint_states reports the actual MuJoCo prismatic joint, whose
-    // per-finger travel is 50 mm.  The fake/real RS driver reports the 45 mm
-    // URDF visual joint.  Treating both as 45 mm inflated MuJoCo feedback by
-    // 11%, producing a false contact-stop before physical closure completed.
-    const visualOpen = hasRsJoint
-      ? (TARGET_KEY === 'simulation' && mujocoStateIsFresh()
-        ? GRIPPER_FINGER_TRAVEL_M
-        : 0.045)
-      : 0.0285;
     return {
       fresh: true,
-      widthCommand: fingerOpeningToGripperCommand(left, visualOpen),
+      widthCommand: fingerOpeningToGripperCommand(left, 0.0285),
       stamp: latestJointStateAt || 0
     };
   }
