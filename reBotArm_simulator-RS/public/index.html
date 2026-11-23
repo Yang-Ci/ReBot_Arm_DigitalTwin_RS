@@ -216,6 +216,12 @@
           <input type="checkbox" id="ros-safe-disconnect">
           <span data-i18n="ros.safeDisconnect">断开时自动安全回零并失能</span>
         </label>
+        <div id="ros-safe-home-close-first-row" hidden>
+          <label class="switch-row">
+            <input type="checkbox" id="ros-safe-home-close-first">
+            <span data-i18n="ros.safeHomeCloseFirst">安全回零前先闭合夹爪</span>
+          </label>
+        </div>
         <label class="switch-row">
           <input type="checkbox" id="ros-mirror">
           <span id="ros-mirror-label" data-i18n="ros.mirror">镜像目标关节状态到网页</span>
@@ -418,7 +424,7 @@ export DEEPSEEK_API_KEY='替换成你的 Key'
         <div style="line-height:1.7;font-size:13px;margin-bottom:12px;">
           <p data-i18n-html="help.s2.enable"><b>使能</b>：给所有电机通电，机械臂进入可接受命令状态。每次重启控制器后需重新使能。预期：日志显示「enabled」，状态栏显示「已使能」。</p>
           <p data-i18n-html="help.s2.disable"><b>失能</b>：先检查六轴是否在零位附近且已停稳；否则自动安全回零，确认到位后才失能。回零失败时保持使能。</p>
-          <p data-i18n-html="help.s2.home"><b>安全回零</b>：平滑插值回到所有关节零位（0°），速度受限。建议在异常或任务结束后使用。预期：6 个关节缓慢回到 0°，3D 模型同步跟随。</p>
+          <p data-i18n-html="help.s2.home"><b>安全回零</b>：六轴以受限速度回到 0°。勾选「安全回零前先闭合夹爪」时，J7 先以 3 rad/s 为速度上限闭合，到位后六轴再回零。取消勾选时保持夹爪开口。</p>
         </div>
 
         <h4 style="color:#d7fff4;margin-bottom:4px;" data-i18n="help.s3.title">三、夹爪控制</h4>
@@ -555,12 +561,12 @@ export DEEPSEEK_API_KEY='替换成你的 Key'
   <script src="./lib/ColladaLoader.js"></script>
   <script src="./lib/URDFLoader.js"></script>
   <script src="./js/pwa.js?v=20261103-deepseek01"></script>
-  <script src="./js/i18n.js?v=20261103-rs-repick16"></script>
+  <script src="./js/i18n.js?v=20261123-rs-home-gripper"></script>
   <script src="./js/wrist-camera.js?v=20261009-rs-camera03"></script>
   <script src="./js/ros/rebot-ros-client.js?v=20261103-rs-repick16"></script>
   <script src="./js/rebot-sim.js?v=20261103-rs-repick16"></script>
   <script src="./js/control-mode.js?v=20260812-rs-ctrl32"></script>
-  <script src="./js/ros/rebot-ros-ui.js?v=20261103-rs-repick16"></script>
+  <script src="./js/ros/rebot-ros-ui.js?v=20261123-rs-home-gripper"></script>
   <script src="./js/ros/leader-model.js?v=20261007-leader02"></script>
   <script src="./js/ros/rebot-leader-ui.js?v=20261007-leader02"></script>
   <script src="./js/motorbridge/rebot-motorbridge-client.js?v=20260812-rs-ctrl32"></script>

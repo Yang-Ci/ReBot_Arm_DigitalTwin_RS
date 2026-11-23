@@ -37,6 +37,8 @@
   const DEFAULT_SLIDER_DAMPING_MS = 30;
   const DEFAULT_TRAJECTORY_DURATION_S = 2;
   const GRIPPER_VLIM_RAD_S = 5.0;
+  const SAFE_HOME_GRIPPER_VLIM_RAD_S = 3.0;
+  const SAFE_HOME_GRIPPER_TOLERANCE_RAD = 0.12;
   const TEACH_ENDPOINT_DURATION_S = 3;
   const STORAGE_ZONES = {
     red: { x: 0.49, y: -0.16, z: 0.1225 },
@@ -89,6 +91,8 @@
     connect: document.getElementById('ros-connect'),
     disconnect: document.getElementById('ros-disconnect'),
     safeDisconnect: document.getElementById('ros-safe-disconnect'),
+    safeHomeCloseFirstRow: document.getElementById('ros-safe-home-close-first-row'),
+    safeHomeCloseFirst: document.getElementById('ros-safe-home-close-first'),
     mirror: document.getElementById('ros-mirror'),
     mirrorLabel: document.getElementById('ros-mirror-label'),
     control: document.getElementById('ros-control-enable'),
@@ -154,6 +158,7 @@
     });
   }
   if (els.targetTitle) els.targetTitle.textContent = `${TARGET.label}连接`;
+  if (els.safeHomeCloseFirstRow) els.safeHomeCloseFirstRow.hidden = TARGET_KEY !== 'hardware';
   if (els.safetySection) els.safetySection.hidden = TARGET_KEY !== 'hardware';
   if (els.teachHardwareRecord) els.teachHardwareRecord.hidden = TARGET_KEY !== 'hardware';
   if (els.teachHardwareModeRow) els.teachHardwareModeRow.hidden = TARGET_KEY !== 'hardware';
@@ -338,14 +343,40 @@
      .finally(resetWebControlState);
    });
  });
- els.safeHome.addEventListener('click', () => {
-   void stopHardwareTeaching(true).finally(() => {
-   cancelLowLevelPlayback();
-   resetWebControlState();
-   void guardedCall(() => client.safeHome(), t('msg.reqSafeHome'))
-     .finally(resetWebControlState);
-   });
- });
+  els.safeHome.addEventListener('click', async () => {
+    if (els.safeHome.disabled) return;
+    els.safeHome.disabled = true;
+    const closeFirst = TARGET_KEY === 'hardware' && els.safeHomeCloseFirst?.checked;
+    const socket = client.socket;
+    const canContinue = () => client.socket === socket && !safeDisconnectBusy &&
+      !window.reBotControlMode?.is('motorbridge') && controlAllowed(false);
+    try {
+      await stopHardwareTeaching(true);
+      cancelLowLevelPlayback();
+      resetWebControlState();
+      if (closeFirst) {
+        if (!controlAllowed(true) || !canContinue()) return;
+        const stopped = await guardedCall(
+          () => client.stopGravityCompensation(), t('msg.reqGravityStop')
+        );
+        if (stopped?.success !== true || !canContinue()) return;
+        const closed = await commandGripperAndWait(CLOSE_GRIPPER_M, t('msg.safeHomeClosingGripper'), {
+          timeoutMs: 3000,
+          tolerance: gripperMotorToWidth(CLOSE_GRIPPER_MOTOR_RAD + SAFE_HOME_GRIPPER_TOLERANCE_RAD) - CLOSE_GRIPPER_M,
+          requireReached: true,
+          vlim: SAFE_HOME_GRIPPER_VLIM_RAD_S,
+          canContinue
+        });
+        if (!closed || !canContinue()) return;
+      }
+      await guardedCall(() => client.safeHome(), t('msg.reqSafeHome'));
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      resetWebControlState();
+      els.safeHome.disabled = false;
+    }
+  });
  els.gravityStart.addEventListener('click', () => {
    cancelLowLevelPlayback();
    cancelPendingWebMotionCommands();
@@ -3711,9 +3742,12 @@
       requireReached: false,
       requireSettled: false,
       positionStableTolerance: 0.0008,
+      vlim: GRIPPER_VLIM_RAD_S,
+      canContinue: () => true,
       ...(options || {})
     };
-    publishGripper(position);
+    if (!settings.canContinue()) return false;
+    publishGripper(position, settings);
     setMessage(label);
 
     const start = performance.now();
@@ -3733,9 +3767,11 @@
 
     while (performance.now() - start < settings.timeoutMs) {
       await sleep(80);
+      if (!settings.canContinue()) return false;
       const now = performance.now();
+      if (now - start >= settings.timeoutMs) break;
       if (now - lastRepublishAt > 520) {
-        publishGripperWidthCommand(position);
+        publishGripperWidthCommand(position, settings.vlim);
         lastRepublishAt = now;
       }
 
@@ -3847,6 +3883,7 @@
       ? t('fb.gripperSrcFb', { src: source, mm: Math.round(current * 1000) })
       : '';
     writeLog(`${label}完成${feedback}`, 'ok');
+    return true;
   }
 
   function readGripperFeedbackPosition(commandPosition) {
@@ -3913,17 +3950,17 @@
     return CLOSE_GRIPPER_M + ratio * (OPEN_GRIPPER_M - CLOSE_GRIPPER_M);
   }
 
-  function publishGripperWidthCommand(width) {
+  function publishGripperWidthCommand(width, vlim = GRIPPER_VLIM_RAD_S) {
     gripperAssistActive = false;
     updateGripperModeDisplay();
-    client.publishGripperCommand(gripperWidthToMotor(width), GRIPPER_VLIM_RAD_S);
+    client.publishGripperCommand(gripperWidthToMotor(width), vlim);
   }
 
-  function publishGripper(position) {
+  function publishGripper(position, { vlim = GRIPPER_VLIM_RAD_S, canContinue = () => true } = {}) {
     dampedSliderCommands.delete('gripper');
     if (gripperRepublishTimer) window.clearTimeout(gripperRepublishTimer);
     syncSimGripper(position);
-    publishGripperWidthCommand(position);
+    publishGripperWidthCommand(position, vlim);
     simTargetAngles.set('gripper', position);
     mirrorHoldUntil.set('gripper', performance.now() + 1200);
     const feedback = typeof latestGripperPosition === 'number' ? t('fb.gripperFb', { mm: Math.round(latestGripperPosition * 1000) }) : '';
@@ -3931,7 +3968,7 @@
     writeLog(`夹爪指令 ${Math.round(position * 1000)} 毫米 -> /${NS}/gripper/cmd/mit`, 'ok');
     gripperRepublishTimer = window.setTimeout(() => {
       gripperRepublishTimer = 0;
-      if (client.connected) publishGripperWidthCommand(position);
+      if (client.connected && canContinue()) publishGripperWidthCommand(position, vlim);
     }, 120);
   }
 

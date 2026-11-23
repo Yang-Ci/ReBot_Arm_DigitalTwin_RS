@@ -13,12 +13,14 @@ class BrowserCustomEvent extends Event {
 
 function consoleFixture(target, withPlacementHooks = false) {
   const elements = new Map();
+  const listeners = new Map();
   function element(id) {
     if (!elements.has(id)) elements.set(id, {
       value: ({ 'ros-vlim': '1.20', 'ros-slider-damping': '30', 'ros-trajectory-duration': '2' })[id] || '',
       checked: false, style: {}, dataset: {}, children: [],
       classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
-      addEventListener() {}, querySelectorAll() { return []; },
+      addEventListener(event, listener) { listeners.set(`${id}:${event}`, listener); },
+      querySelectorAll() { return []; },
       querySelector() { return element(`${id}-child`); },
       prepend() {}, getAttribute() { return null; }
     });
@@ -73,6 +75,7 @@ function consoleFixture(target, withPlacementHooks = false) {
             if (m.goal) sendVisionMoveGoal = m.goal;
             if (m.settle) waitForArmMotionSettled = m.settle;
             if (m.allow) controlAllowed = m.allow;
+            if (m.sleep) sleep = m.sleep;
           }
         };
       })();`);
@@ -81,9 +84,91 @@ function consoleFixture(target, withPlacementHooks = false) {
   }
   return { client: window.reBotRos, Client: window.ReBotRosClient, displayed, presetFeedbackModes, gripperAnimations,
     element, placement: window.__placementTest,
+    click(id) { return listeners.get(`${id}:click`)(); },
     setVisual(angles) { visualAngles = { ...angles }; },
     frame(ms) { clock += ms; const queued = [...frames.values()]; frames.clear(); queued.forEach(callback => callback(clock)); },
     advance(ms) { clock += ms; } };
+}
+
+function safeHomeFixture({ closeFirst, stopGravitySuccess = true } = {}) {
+  const { client, click, element, placement, advance } = consoleFixture('hardware', true);
+  const messages = [];
+  const sleepers = [];
+  placement.setMocks({ sleep: () => new Promise((resolve) => sleepers.push(resolve)) });
+  element('ros-control-enable').checked = true;
+  element('ros-safe-home-close-first').checked = Boolean(closeFirst);
+  client.connected = true;
+  client.socket = { readyState: 1, send(data) {
+    const message = JSON.parse(data);
+    messages.push(message);
+    if (message.op === 'call_service') {
+      const success = !message.service.endsWith('/gravity_compensation/stop') || stopGravitySuccess;
+      queueMicrotask(() => client._handleMessage({
+        data: JSON.stringify({ op: 'service_response', id: message.id, result: true, values: { success } })
+      }));
+    }
+  } };
+  function publishFeedback(suffix, msg) {
+    client._handleMessage({ data: JSON.stringify({ op: 'publish', topic: `/rebot_arm_rs/${suffix}`, msg }) });
+  }
+  publishFeedback('joint_states', { name: ['joint1'], position: [0.1] });
+  publishFeedback('arm_status', { enabled: true, state_machine: 'IDLE' });
+  return {
+    client, element, click,
+    services: () => messages.filter((message) => message.op === 'call_service').map((message) => message.service),
+    gripper: () => messages.filter((message) => message.op === 'publish'),
+    tick(ms, position) {
+      advance(ms);
+      if (position !== undefined) {
+        publishFeedback('gripper/state', { position, velocity: 0 });
+      }
+      sleepers.splice(0).forEach((resolve) => resolve());
+    }
+  };
+}
+
+test('RS hardware safe home preserves the gripper opening by default', async () => {
+  const ui = safeHomeFixture();
+  await ui.click('ros-safe-home');
+  assert.deepEqual(ui.services(), ['/rebot_arm_rs/safe_home']);
+  assert.deepEqual(ui.gripper(), []);
+});
+
+test('RS hardware safe home with close-first waits for fresh J7 closure at 3 rad/s', async () => {
+  const ui = safeHomeFixture({ closeFirst: true });
+  ui.tick(10, 0); // A cached closed sample cannot advance the sequence.
+  const finished = ui.click('ros-safe-home');
+  await ui.click('ros-safe-home');
+  await new Promise(setImmediate);
+  assert.deepEqual(ui.services(), ['/rebot_arm_rs/gravity_compensation/stop']);
+  assert.equal(ui.gripper().length, 1);
+  ui.tick(600, 2);
+  await new Promise(setImmediate);
+  assert.deepEqual(ui.services(), ['/rebot_arm_rs/gravity_compensation/stop']);
+  ui.tick(250, 0.07);
+  await finished;
+  assert.deepEqual(ui.services(), ['/rebot_arm_rs/gravity_compensation/stop', '/rebot_arm_rs/safe_home']);
+  assert.equal(ui.gripper().length, 2);
+  for (const command of ui.gripper()) {
+    assert.equal(command.topic, '/rebot_arm_rs/gripper/cmd/mit');
+    assert.deepEqual([command.msg.pos, command.msg.vel], [0, 3]);
+  }
+});
+
+for (const scenario of ['no closure feedback', 'reconnected', 'control locked', 'gravity stop failed']) {
+  test(`RS hardware safe home with close-first aborts before arm motion (${scenario})`, async () => {
+    const ui = safeHomeFixture({ closeFirst: true, stopGravitySuccess: scenario !== 'gravity stop failed' });
+    const finished = ui.click('ros-safe-home');
+    await new Promise(setImmediate);
+    if (scenario === 'reconnected') ui.client.socket = { ...ui.client.socket };
+    if (scenario === 'control locked') ui.element('ros-control-enable').checked = false;
+    if (scenario === 'no closure feedback') ui.tick(3100);
+    else ui.tick(600, 0);
+    await finished;
+    assert.deepEqual(ui.services(), ['/rebot_arm_rs/gravity_compensation/stop']);
+    assert.equal(ui.gripper().length, scenario === 'gravity stop failed' ? 0 : 1);
+    assert.equal(ui.element('ros-safe-home').disabled, false);
+  });
 }
 
 for (const [target, namespace] of [['hardware', 'rebot_arm_rs'], ['simulation', 'rebot_arm_rs_sim']]) {

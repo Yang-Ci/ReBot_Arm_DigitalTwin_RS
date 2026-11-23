@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rebot-arm-rs-pwa-v128-deepseek';
+const CACHE_NAME = 'rebot-arm-rs-pwa-v130-home-gripper';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -6,12 +6,12 @@ const APP_SHELL = [
   '/favicon.png',
   '/css/rebot-sim.css?v=20261103-deepseek01',
   '/js/pwa.js?v=20260812-rs-ctrl32',
-  '/js/i18n.js?v=20261103-rs-repick16',
+  '/js/i18n.js?v=20261123-rs-home-gripper',
   '/js/rebot-sim.js?v=20261103-rs-repick16',
   '/js/wrist-camera.js?v=20261009-rs-camera03',
   '/js/ros/rebot-ros-client.js?v=20261103-rs-repick16',
   '/js/control-mode.js?v=20260812-rs-ctrl32',
-  '/js/ros/rebot-ros-ui.js?v=20261103-rs-repick16',
+  '/js/ros/rebot-ros-ui.js?v=20261123-rs-home-gripper',
   '/js/ros/leader-model.js?v=20261007-leader02',
   '/js/ros/rebot-leader-ui.js?v=20261007-leader02',
   '/css/leader-teleop.css?v=20261007-leader02',
