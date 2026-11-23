@@ -106,6 +106,9 @@ export REBOTARM_RS_HARDWARE_CONFIRM=I_UNDERSTAND_RS_WILL_MOVE
 执行前必须确认 `can0` 配置正确、机械臂工作区无人、物理急停可用。网页真机
 模式不会自动打开控制锁。
 
+在 ROS 真机面板点击「安全回零」时，默认保持夹爪开口。勾选「安全回零前先闭合夹爪」后，
+J7 先以 `3 rad/s` 为速度上限闭合，确认到位后 J1–J6 再回零。该选项与「断开时自动安全回零并失能」独立设置。
+
 ### 推动真机示教
 
 1. 启动 RS 真机 ROS 2 Controller 与 rosbridge，网页选择“RS 真机”。
